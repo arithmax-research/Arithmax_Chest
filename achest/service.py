@@ -210,9 +210,109 @@ def _databento(symbol: str, request: DataRequest) -> pd.DataFrame:
     return data[["open", "high", "low", "close", "volume"]]
 
 
+def _fred(symbol: str, request: DataRequest) -> pd.DataFrame:
+    """Fetch economic indicators from FRED."""
+    key = os.getenv("FRED_API_KEY")
+    if not key:
+        raise RuntimeError("FRED_API_KEY is not configured on the server")
+    response = requests.get(
+        "https://api.stlouisfed.org/fred/series/observations",
+        params={"series_id": symbol, "api_key": key, "file_type": "json",
+                "observation_start": request.start.isoformat(), "observation_end": request.end.isoformat()},
+        timeout=60,
+    )
+    response.raise_for_status()
+    rows = response.json().get("observations", [])
+    bars = []
+    for row in rows:
+        value = row.get("value", ".")
+        if value == ".":
+            continue
+        bars.append({
+            "timestamp": row["date"],
+            "open": float(value),
+            "high": float(value),
+            "low": float(value),
+            "close": float(value),
+            "volume": 0,
+        })
+    return _frame_from_bars(bars)
+
+
+def _alpaca(symbol: str, request: DataRequest) -> pd.DataFrame:
+    key = os.getenv("ALPACA_API_KEY")
+    secret = os.getenv("ALPACA_SECRET_KEY")
+    if not key or not secret:
+        raise RuntimeError("ALPACA_API_KEY or ALPACA_SECRET_KEY is not configured")
+    timespan = {"tick": "tick", "minute": "1Min", "hour": "1Hour", "daily": "1Day"}[request.resolution]
+    url = f"https://data.alpaca.markets/v2/stocks/{symbol}/bars"
+    response = requests.get(url, params={
+        "timeframe": timespan, "start": request.start.isoformat(), "end": request.end.isoformat(), "limit": 10000,
+    }, headers={"APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": secret}, timeout=60)
+    response.raise_for_status()
+    return _frame_from_bars({
+        "timestamp": bar["t"], "open": bar["o"], "high": bar["h"],
+        "low": bar["l"], "close": bar["c"], "volume": bar["v"],
+    } for bar in response.json().get("bars", []))
+
+
+def _tiingo(symbol: str, request: DataRequest) -> pd.DataFrame:
+    key = os.getenv("TIINGO_API_KEY")
+    if not key:
+        raise RuntimeError("TIINGO_API_KEY is not configured")
+    freq = {"tick": "tick", "second": "1sec", "minute": "1min", "hour": "1hour", "daily": "daily"}[request.resolution]
+    url = f"https://api.tiingo.com/tiingo/{'crypto' if 'USDT' in symbol or 'USD' in symbol else 'daily'}/{symbol}/prices"
+    response = requests.get(url, params={
+        "startDate": request.start.isoformat(), "endDate": request.end.isoformat(), "resampleFreq": freq,
+    }, headers={"Authorization": f"Token {key}"}, timeout=60)
+    response.raise_for_status()
+    return _frame_from_bars({
+        "timestamp": row["date"], "open": row["open"], "high": row["high"],
+        "low": row["low"], "close": row["close"], "volume": row.get("volume", 0),
+    } for row in response.json())
+
+
+def _alpha_vantage(symbol: str, request: DataRequest) -> pd.DataFrame:
+    key = os.getenv("ALPHA_VANTAGE_API_KEY")
+    if not key:
+        raise RuntimeError("ALPHA_VANTAGE_API_KEY is not configured")
+    func = {"minute": "TIME_SERIES_INTRADAY", "hour": "TIME_SERIES_INTRADAY", "daily": "TIME_SERIES_DAILY"}[request.resolution]
+    params = {"function": func, "symbol": symbol, "apikey": key, "outputsize": "full"}
+    if func == "TIME_SERIES_INTRADAY":
+        params["interval"] = {"minute": "1min", "hour": "60min"}[request.resolution]
+    response = requests.get("https://www.alphavantage.co/query", params=params, timeout=60)
+    response.raise_for_status()
+    data = response.json()
+    key_map = {"1. open": "open", "2. high": "high", "3. low": "low", "4. close": "close", "5. volume": "volume"}
+    time_key = next((k for k in data if "Time Series" in k), None)
+    if not time_key:
+        return pd.DataFrame()
+    return _frame_from_bars(
+        {"timestamp": ts, **{key_map[k]: float(v) if k != "5. volume" else int(float(v)) for k, v in row.items() if k in key_map}}
+        for ts, row in data[time_key].items()
+    )
+
+
+def _quandl(symbol: str, request: DataRequest) -> pd.DataFrame:
+    key = os.getenv("QUANDL_API_KEY")
+    if not key:
+        raise RuntimeError("QUANDL_API_KEY is not configured")
+    response = requests.get(f"https://www.quandl.com/api/v3/datasets/{symbol}/data.json", params={
+        "api_key": key, "start_date": request.start.isoformat(), "end_date": request.end.isoformat(),
+    }, timeout=60)
+    response.raise_for_status()
+    data = response.json().get("dataset_data", {})
+    cols = {c.lower(): i for i, c in enumerate(data.get("column_names", []))}
+    return _frame_from_bars({
+        "timestamp": row[0], "open": row[cols.get("open", 1)], "high": row[cols.get("high", 2)],
+        "low": row[cols.get("low", 3)], "close": row[cols.get("close", 4)], "volume": row[cols.get("volume", 5)] if "volume" in cols else 0,
+    } for row in data.get("data", []))
+
+
 def fetch_symbol(request: DataRequest, symbol: str) -> tuple[str, pd.DataFrame]:
     provider = select_provider(symbol, request.provider, request.resolution)
-    fetchers = {"yahoo": _yahoo, "binance": _binance, "massive": _massive, "databento": _databento}
+    fetchers = {"yahoo": _yahoo, "binance": _binance, "massive": _massive, "databento": _databento, "fred": _fred,
+                "alpaca": _alpaca, "tiingo": _tiingo, "alpha_vantage": _alpha_vantage, "quandl": _quandl}
     frame = fetchers[provider](symbol, request)
     if not frame.empty:
         frame.index = pd.to_datetime(frame.index, utc=True)
