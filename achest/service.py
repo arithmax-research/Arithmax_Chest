@@ -79,12 +79,34 @@ def classify_symbol(symbol: str) -> str:
     return "equity"
 
 
+# Map provider -> env var name for required API key (empty = no key needed)
+_PROVIDER_KEY_MAP = {
+    "databento": "DATABENTO_API_KEY",
+    "polygon": "POLYGON_API_KEY",
+    "alpaca": "ALPACA_API_KEY",
+    "tiingo": "TIINGO_API_KEY",
+    "alpha_vantage": "ALPHA_VANTAGE_API_KEY",
+    "fred": "FRED_API_KEY",
+    "quandl": "QUANDL_API_KEY",
+    "binance": "",       # public API, no key required
+    "yahoo": "",         # public API, no key required
+}
+
+
+def _provider_key_configured(provider: str) -> bool:
+    """Return True if the provider can be used (key configured or not needed)."""
+    env_var = _PROVIDER_KEY_MAP.get(provider, "")
+    return not env_var or bool(os.getenv(env_var))
+
+
 def select_provider(symbol: str, requested: str, resolution: str) -> str:
     asset = classify_symbol(symbol)
     if requested != "auto":
         capabilities = PROVIDER_CAPABILITIES.get(requested)
         if not capabilities or asset not in capabilities["assets"] or resolution not in capabilities["resolutions"]:
             raise UnsupportedRequest(f"Provider {requested!r} does not support {asset} at {resolution} resolution")
+        if not _provider_key_configured(requested):
+            raise UnsupportedRequest(f"Provider {requested!r} is not configured on this server (missing API key)")
         return requested
     preferences = {
         "futures": ["databento", "polygon"],
@@ -95,7 +117,7 @@ def select_provider(symbol: str, requested: str, resolution: str) -> str:
         "economic": ["fred", "quandl"],
     }.get(asset, ["yahoo"])
     for provider in preferences:
-        if resolution in PROVIDER_CAPABILITIES[provider]["resolutions"]:
+        if resolution in PROVIDER_CAPABILITIES[provider]["resolutions"] and _provider_key_configured(provider):
             return provider
     raise UnsupportedRequest(f"No provider supports {asset} at {resolution} resolution")
 
