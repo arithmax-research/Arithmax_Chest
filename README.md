@@ -20,7 +20,7 @@ Use the hosted service URL unless you are running a local instance for developme
 ```python
 from achest import MarketDataClient
 
-with MarketDataClient("https://achest.misango.me") as client:
+with MarketDataClient as client:
     data = client.get(
         ["AAPL"],
         "2024-01-01",
@@ -31,36 +31,6 @@ with MarketDataClient("https://achest.misango.me") as client:
 print(data.head())
 ```
 
-Equivalent HTTP request:
-
-```bash
-curl -X POST https://achest.misango.me/v1/data \
-  -H "Content-Type: application/json" \
-  -d '{
-    "symbols": ["AAPL"],
-    "start": "2024-01-01",
-    "end": "2024-01-31",
-    "resolution": "daily",
-    "provider": "auto",
-    "format": "json"
-  }'
-```
-
-If a bearer token is required:
-
-```bash
-curl -X POST https://achest.misango.me/v1/data \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $DATA_API_TOKEN" \
-  -d '{
-    "symbols": ["AAPL"],
-    "start": "2024-01-01",
-    "end": "2024-01-31",
-    "resolution": "daily",
-    "provider": "auto",
-    "format": "json"
-  }'
-```
 
 ### Data shape
 
