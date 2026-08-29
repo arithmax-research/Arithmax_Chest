@@ -27,8 +27,8 @@ PROVIDER_CAPABILITIES = {
         "assets": {"crypto"},
         "resolutions": {"tick", "second", "minute", "hour", "daily", "weekly", "monthly"},
     },
-    "polygon": {
-        "assets": {"equity", "etf", "index", "crypto", "forex", "options"},
+    "massive": {
+        "assets": {"equity", "etf", "index", "crypto", "forex", "futures", "options"},
         "resolutions": {"tick", "second", "minute", "hour", "daily", "weekly", "monthly"},
     },
     "databento": {
@@ -82,7 +82,7 @@ def classify_symbol(symbol: str) -> str:
 # Map provider -> env var name for required API key (empty = no key needed)
 _PROVIDER_KEY_MAP = {
     "databento": "DATABENTO_API_KEY",
-    "polygon": "POLYGON_API_KEY",
+    "massive": "MASSIVE_API_KEY",
     "alpaca": "ALPACA_API_KEY",
     "tiingo": "TIINGO_API_KEY",
     "alpha_vantage": "ALPHA_VANTAGE_API_KEY",
@@ -109,7 +109,7 @@ def select_provider(symbol: str, requested: str, resolution: str) -> str:
             raise UnsupportedRequest(f"Provider {requested!r} is not configured on this server (missing API key)")
         return requested
     preferences = {
-        "futures": ["databento", "polygon"],
+        "futures": ["databento", "massive"],
         "crypto": ["binance", "yahoo", "tiingo", "alpha_vantage"],
         "equity": ["yahoo", "alpaca", "tiingo", "alpha_vantage"],
         "etf": ["yahoo", "alpaca", "tiingo"],
@@ -164,14 +164,20 @@ def _binance(symbol: str, request: DataRequest) -> pd.DataFrame:
     } for row in response.json())
 
 
-def _polygon(symbol: str, request: DataRequest) -> pd.DataFrame:
-    timespan = {"minute": "minute", "hour": "hour", "daily": "day"}[request.resolution]
-    key = os.getenv("POLYGON_API_KEY")
+def _massive(symbol: str, request: DataRequest) -> pd.DataFrame:
+    """Fetch OHLCV data from Massive (replaces deprecated Polygon)."""
+    key = os.getenv("MASSIVE_API_KEY")
     if not key:
-        raise RuntimeError("POLYGON_API_KEY is not configured on the server")
+        raise RuntimeError("MASSIVE_API_KEY is not configured on the server")
+    access_key = os.getenv("MASSIVE_ACCESS_KEY_ID", "")
+    secret_key = os.getenv("MASSIVE_SECRET_ACCESS_KEY", "")
+    endpoint = os.getenv("MASSIVE_S3_ENDPOINT", "https://files.massive.com")
+    bucket = os.getenv("MASSIVE_S3_BUCKET", "flatfiles")
+    timespan = {"minute": "minute", "hour": "hour", "daily": "day"}[request.resolution]
     response = requests.get(
-        f"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/{timespan}/{request.start}/{request.end}",
-        params={"apiKey": key, "limit": 50000}, timeout=120,
+        f"{endpoint}/v1/{bucket}/aggs/ticker/{symbol}/range/1/{timespan}/{request.start}/{request.end}",
+        params={"apiKey": key, "accessKey": access_key, "secretKey": secret_key, "limit": 50000},
+        timeout=120,
     )
     response.raise_for_status()
     return _frame_from_bars({
@@ -202,7 +208,7 @@ def _databento(symbol: str, request: DataRequest) -> pd.DataFrame:
 
 def fetch_symbol(request: DataRequest, symbol: str) -> tuple[str, pd.DataFrame]:
     provider = select_provider(symbol, request.provider, request.resolution)
-    fetchers = {"yahoo": _yahoo, "binance": _binance, "polygon": _polygon, "databento": _databento}
+    fetchers = {"yahoo": _yahoo, "binance": _binance, "massive": _massive, "databento": _databento}
     frame = fetchers[provider](symbol, request)
     if not frame.empty:
         frame.index = pd.to_datetime(frame.index, utc=True)
