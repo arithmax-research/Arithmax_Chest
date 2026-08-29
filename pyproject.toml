@@ -4,13 +4,27 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "arithmaxchest"
-version = "0.1.1"
-description = "Normalized multi-asset market-data API and Python client with provider routing and export tooling"
+version = "0.2.0"
+description = "Normalized OHLCV market data for equities, crypto, futures, and macro — one API, many providers"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
-authors = [{ name = "Arithmax" }]
-keywords = ["finance", "market-data", "api", "ohlcv", "time-series", "provider-routing", "python"]
+license = "MIT"
+authors = [{ name = "Arithmax", email = "hello@arithmax.com" }]
+keywords = ["market-data", "finance", "ohlcv", "stocks", "crypto", "futures", "timeseries", "api", "data-provider"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "fastapi>=0.110",
     "httpx>=0.27",
@@ -19,6 +33,12 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "requests>=2.31",
 ]
+
+[project.urls]
+Homepage = "https://achest.misango.me"
+Repository = "https://github.com/arithmax-research/Arithmax_Chest"
+Documentation = "https://github.com/arithmax-research/Arithmax_Chest/blob/main/documentation.md"
+Changelog = "https://github.com/arithmax-research/Arithmax_Chest/releases"
 
 [project.optional-dependencies]
 yahoo = ["yfinance>=0.2.40"]

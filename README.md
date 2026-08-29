@@ -1,95 +1,145 @@
-<div align="center">
-  <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
-  <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
-  <img src="https://img.shields.io/badge/Uvicorn-4B32C3?style=for-the-badge&logo=uvicorn&logoColor=white" alt="Uvicorn" />
-  <img src="https://img.shields.io/badge/Pandas-150458?style=for-the-badge&logo=pandas&logoColor=white" alt="Pandas" />
-  <img src="https://img.shields.io/badge/PyArrow-FFD43B?style=for-the-badge&logo=apache-arrow&logoColor=black" alt="PyArrow" />
-  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
-  <img src="https://img.shields.io/badge/AWS-232F3E?style=for-the-badge&logo=amazonaws&logoColor=white" alt="AWS" />
-  <img src="https://img.shields.io/badge/Caddy-22C55E?style=for-the-badge&logo=caddy&logoColor=white" alt="Caddy" />
-  <img src="https://img.shields.io/badge/Binance-FCD535?style=for-the-badge&logo=binance&logoColor=black" alt="Binance" />
-  <img src="https://img.shields.io/badge/Alpaca-1C1C1C?style=for-the-badge&logo=alpaca&logoColor=white" alt="Alpaca" />
-  <img src="https://img.shields.io/badge/Tiingo-1A73E8?style=for-the-badge&logo=tiingo&logoColor=white" alt="Tiingo" />
-  <img src="https://img.shields.io/badge/Databento-0F172A?style=for-the-badge&logo=data&logoColor=white" alt="Databento" />
-</div>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="Treasure Chest DataGraph Logo.png">
+    <img src="Treasure Chest DataGraph Logo.png" alt="Arithmax Chest" width="120" height="120">
+  </picture>
+  <h1 align="center">Arithmax Chest</h1>
+  <p align="center">
+    <em>Normalized market data. One API. Every provider.</em>
+    <br>
+    Equities &middot; Crypto &middot; Futures &middot; Macro
+  </p>
+  <p align="center">
+    <a href="https://pypi.org/project/arithmaxchest/"><img src="https://img.shields.io/pypi/v/arithmaxchest?color=4B8BBE&label=PyPI" alt="PyPI"></a>
+    <a href="https://pypi.org/project/arithmaxchest/"><img src="https://img.shields.io/pypi/pyversions/arithmaxchest?color=4B8BBE" alt="Python Versions"></a>
+    <a href="https://achest.misango.me/health"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fachest.misango.me%2Fhealth&label=API&color=22C55E" alt="API Status"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
+  </p>
+</p>
 
-# Arithmax Chest (achest)
+---
 
-<table>
-  <tr>
-    <td width="160" align="center" valign="top">
-      <img src="Treasure Chest DataGraph Logo.png" alt="Arithmax Chest logo" width="140" height = "140" />
-    </td>
-    <td valign="top">
-      Arithmax Chest is a market-data platform for normalized OHLCV data across equities, crypto, futures, and macro market sources. It gives developers and analysts a clean way to request data without needing to understand the underlying provider contracts or routing logic.
-    </td>
-  </tr>
-</table>
-
-## Why Arithmax Chest
-
-- Clean, normalized market data for research and analysis
-- Simple request flow: symbol, date range, and resolution
-- Supports multiple asset classes with a single interface
-- Built for both API users and Python-based workflows
-
-## Quick start
-
-Use the hosted service URL unless you are running a local instance for development.
+**Arithmax Chest** gives you a single, normalized interface to fetch OHLCV market data across multiple asset classes — without worrying about which provider powers each symbol. Just ask for the data and the backend handles the routing.
 
 ```python
 from achest import MarketDataClient
 
 with MarketDataClient() as client:
-    data = client.get(
-        ["AAPL"],
-        "2024-01-01",
-        "2024-01-31",
-        resolution="daily",
-    )
+    data = client.get(["AAPL", "BTCUSDT", "ES.FUT"],
+                      "2025-01-01", "2025-01-31")
 
 print(data.head())
 ```
 
-### Data shape
+## Features
 
-The API returns normalized OHLCV data with standard columns:
+- **Multi-asset** — Equities, crypto, futures, ETFs, indices, forex, economic indicators
+- **Multi-resolution** — Tick, second, minute, hour, daily, weekly, monthly
+- **Auto-routing** — The backend selects the best provider for each symbol automatically
+- **Provider-agnostic client** — Your code never touches provider-specific SDKs or API keys
+- **Time-saving** — No more juggling Binance, Yahoo, Polygon, Alpaca, FRED, etc.
 
-- timestamp
-- open
-- high
-- low
-- close
-- volume
-
-You only need to provide:
-
-- a symbol such as `AAPL`, `BTCUSDT`, or `ES.FUT`
-- a start date
-- an end date
-- a resolution such as `daily`, `hour`, or `minute`
-
-## Install
+## Installation
 
 ```bash
 pip install arithmaxchest
 ```
 
-## Supported use cases
+For optional provider support:
 
-- Equity price history
-- Crypto market data
-- Futures and macro datasets
-- Research pipelines and analytics workflows
-- Lean-style or normalized data ingestion for downstream systems
+```bash
+pip install arithmaxchest[all]        # includes yfinance, databento, uvicorn
+pip install arithmaxchest[yahoo]      # yfinance support only
+pip install arithmaxchest[futures]     # databento support only
+pip install arithmaxchest[server]      # uvicorn for self-hosting
+```
 
-## Docs
+## Quick Start
 
-- Public user docs: this README
-- Maintainer and deployment notes: [documentation.md](documentation.md)
+### Using the hosted API (no server setup required)
 
-## Notes
+```python
+from achest import MarketDataClient
 
-- The public API hides provider complexity by design.
-- Provider credentials stay on the server side, not in client code.
-- Internal operational tooling and deployment details live in [documentation.md](documentation.md) rather than the end-user README.
+with MarketDataClient() as client:
+    # Equities via Yahoo
+    aapl = client.get(["AAPL"], "2025-01-01", "2025-01-31")
+    print(aapl.head())
+
+    # Crypto via Binance
+    btc = client.get(["BTCUSDT"], "2025-01-01", "2025-01-31")
+    print(btc.head())
+
+    # Futures via Databento or Polygon
+    es = client.get(["ES.FUT"], "2025-01-01", "2025-01-31")
+    print(es.head())
+```
+
+### With authentication (self-managed token)
+
+```python
+from achest import MarketDataClient
+
+with MarketDataClient(token="your-api-token") as client:
+    data = client.get(["AAPL"], "2025-01-01", "2025-01-31")
+```
+
+### Download to file
+
+```python
+client.download(["SPY", "QQQ"], "2025-01-01", "2025-01-31",
+                output="market-data.parquet")
+```
+
+## Data Shape
+
+All responses return normalized OHLCV data:
+
+| timestamp | symbol | provider | open | high | low | close | volume |
+|-----------|--------|----------|------|------|-----|-------|--------|
+| 2025-01-02 | AAPL | yahoo | 243.5 | 245.8 | 242.3 | 244.9 | 48234500 |
+
+You only provide:
+- **Symbol(s)** — e.g., `AAPL`, `BTCUSDT`, `ES.FUT`, `^GSPC`, `GDP`
+- **Date range** — start and end dates
+- **Resolution** — `daily`, `hour`, `minute`, `tick`, etc.
+
+## Supported Providers
+
+| Provider | Assets | Resolutions |
+|----------|--------|-------------|
+| **Yahoo Finance** | Equity, ETF, Index, Crypto, Forex, Futures | minute, hour, daily, weekly, monthly |
+| **Binance** | Crypto | tick, second, minute, hour, daily, weekly, monthly |
+| **Polygon** | Equity, ETF, Index, Crypto, Forex, Options | tick, second, minute, hour, daily, weekly, monthly |
+| **Databento** | Equity, ETF, Futures, Options, Forex | tick, second, minute, hour, daily |
+| **Alpaca** | Equity, ETF, Crypto | tick, minute, hour, daily |
+| **Tiingo** | Equity, ETF, Index, Crypto, Forex | tick, second, minute, hour, daily |
+| **Alpha Vantage** | Equity, ETF, Index, Crypto, Forex, Economic | minute, hour, daily, weekly, monthly |
+| **FRED** | Economic indicators | daily, weekly, monthly, quarterly, annual |
+| **Quandl** | Equity, ETF, Index, Crypto, Economic, Futures | daily, weekly, monthly, quarterly, annual |
+
+## Self-Hosting
+
+Arithmax Chest is also a FastAPI server you can deploy yourself:
+
+```bash
+pip install arithmaxchest[server]
+uvicorn achest.server:app --host 0.0.0.0 --port 8000
+```
+
+Docker support included — see the [documentation](documentation.md) for EC2 deployment details.
+
+## Why Arithmax Chest?
+
+- **Normalized schema** — Every symbol returns the same columns regardless of provider
+- **Provider abstraction** — The backend picks the best source; your code never changes
+- **Research-ready** — Clean DataFrames with no provider-specific wrangling
+- **Portable** — Works in notebooks, scripts, pipelines, and production systems
+
+## License
+
+MIT
+
+---
+
+*Built by [Arithmax](https://achest.misango.me). Market data for the next generation of analysts and algorithms.*

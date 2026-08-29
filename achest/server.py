@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 from .service import PROVIDER_CAPABILITIES, DataRequest, UnsupportedRequest, fetch, select_provider
 
 load_dotenv()
-app = FastAPI(title="Central Market Data API", version="0.1.1")
+app = FastAPI(title="Central Market Data API", version="0.2.0")
 
 
 class DownloadRequest(BaseModel):
