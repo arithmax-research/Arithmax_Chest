@@ -1,7 +1,22 @@
-# Arithmax Chest
+<div align="center">
+  <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
+  <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/Uvicorn-4B32C3?style=for-the-badge&logo=uvicorn&logoColor=white" alt="Uvicorn" />
+  <img src="https://img.shields.io/badge/Pandas-150458?style=for-the-badge&logo=pandas&logoColor=white" alt="Pandas" />
+  <img src="https://img.shields.io/badge/PyArrow-FFD43B?style=for-the-badge&logo=apache-arrow&logoColor=black" alt="PyArrow" />
+  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
+  <img src="https://img.shields.io/badge/AWS-232F3E?style=for-the-badge&logo=amazonaws&logoColor=white" alt="AWS" />
+  <img src="https://img.shields.io/badge/Caddy-22C55E?style=for-the-badge&logo=caddy&logoColor=white" alt="Caddy" />
+  <img src="https://img.shields.io/badge/Binance-FCD535?style=for-the-badge&logo=binance&logoColor=black" alt="Binance" />
+  <img src="https://img.shields.io/badge/Alpaca-1C1C1C?style=for-the-badge&logo=alpaca&logoColor=white" alt="Alpaca" />
+  <img src="https://img.shields.io/badge/Tiingo-1A73E8?style=for-the-badge&logo=tiingo&logoColor=white" alt="Tiingo" />
+  <img src="https://img.shields.io/badge/Databento-0F172A?style=for-the-badge&logo=data&logoColor=white" alt="Databento" />
+</div>
+
+# Arithmax Chest (achest)
 
 <div align="center">
-  <img src="Treasure Chest DataGraph Logo.png" alt="Arithmax Chest logo" width="260" />
+  <img src="Treasure Chest DataGraph Logo.png" alt="Arithmax Chest logo" width="140" />
 </div>
 
 Arithmax Chest is a market-data platform for normalized OHLCV data across equities, crypto, futures, and macro market sources. It gives developers and analysts a clean way to request data without needing to understand the underlying provider contracts or routing logic.
@@ -20,7 +35,7 @@ Use the hosted service URL unless you are running a local instance for developme
 ```python
 from achest import MarketDataClient
 
-with MarketDataClient as client:
+with MarketDataClient() as client:
     data = client.get(
         ["AAPL"],
         "2024-01-01",
@@ -30,7 +45,6 @@ with MarketDataClient as client:
 
 print(data.head())
 ```
-
 
 ### Data shape
 
@@ -66,36 +80,6 @@ python -m pip install -e '.[all]'
 - Futures and macro datasets
 - Research pipelines and analytics workflows
 - Lean-style or normalized data ingestion for downstream systems
-
-## Tech stack
-
-### Application and data stack
-
-- Python 3.10+
-- FastAPI for the HTTP API layer
-- Uvicorn for ASGI serving
-- Pandas for time-series normalization and analysis
-- PyArrow for efficient data interchange and columnar workflows
-- HTTPX and Requests for upstream API access
-- dotenv-based environment configuration
-
-### Market data and ingestion stack
-
-- Binance for crypto market data
-- Alpaca for equities and market bars
-- Tiingo and Alpha Vantage for additional market coverage
-- FRED, Quandl, and macro data providers for economic and alternative series
-- Databento and Massive/Polygon-based futures and market data integration
-- Lean-style data organization for downstream research and quant pipelines
-
-### DevOps and systems
-
-- Docker for containerized deployment
-- EC2-based hosting and service deployment patterns
-- Caddy / reverse-proxy TLS termination
-- Environment-variable driven secrets and runtime config
-- Local `.env` configuration for development
-- Data pipeline tooling under `Data_Pipeline/` for historical ingestion and maintenance workflows
 
 ## Docs
 
