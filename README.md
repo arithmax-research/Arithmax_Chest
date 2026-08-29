@@ -15,11 +15,16 @@
 
 # Arithmax Chest (achest)
 
-<div align="center">
-  <img src="Treasure Chest DataGraph Logo.png" alt="Arithmax Chest logo" width="140" />
-</div>
-
-Arithmax Chest is a market-data platform for normalized OHLCV data across equities, crypto, futures, and macro market sources. It gives developers and analysts a clean way to request data without needing to understand the underlying provider contracts or routing logic.
+<table>
+  <tr>
+    <td width="160" align="center" valign="top">
+      <img src="Treasure Chest DataGraph Logo.png" alt="Arithmax Chest logo" width="140" height = "140" />
+    </td>
+    <td valign="top">
+      Arithmax Chest is a market-data platform for normalized OHLCV data across equities, crypto, futures, and macro market sources. It gives developers and analysts a clean way to request data without needing to understand the underlying provider contracts or routing logic.
+    </td>
+  </tr>
+</table>
 
 ## Why Arithmax Chest
 
@@ -67,10 +72,7 @@ You only need to provide:
 ## Install
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e '.[all]'
+pip install arithmaxchest
 ```
 
 ## Supported use cases

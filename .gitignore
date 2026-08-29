@@ -1,0 +1,11 @@
+updating.md
+.env
+/Data
+/Data_Pipeline/.env
+/Data_Pipeline/
+**/__pycache__/**
+/achest
+/arithmaxchest.egg-info
+/.pytest_cache
+/tests
+/dist

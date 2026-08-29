@@ -1,0 +1,42 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: arithmax_chest-api:latest
+    container_name: achest-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    expose:
+      - "8000"
+    environment:
+      DATA_API_TOKEN: ${DATA_API_TOKEN:-}
+      BINANCE_BASE_URL: ${BINANCE_BASE_URL:-https://api.binance.us}
+      BINANCE_API_KEY: ${BINANCE_API_KEY:-}
+      BINANCE_SECRET_KEY: ${BINANCE_SECRET_KEY:-}
+      POLYGON_API_KEY: ${POLYGON_API_KEY:-}
+      DATABENTO_API_KEY: ${DATABENTO_API_KEY:-}
+      ALPACA_API_KEY: ${ALPACA_API_KEY:-}
+      ALPACA_SECRET_KEY: ${ALPACA_SECRET_KEY:-}
+      ALPHA_VANTAGE_API_KEY: ${ALPHA_VANTAGE_API_KEY:-}
+      TIINGO_API_KEY: ${TIINGO_API_KEY:-}
+      FRED_API_KEY: ${FRED_API_KEY:-}
+      QUANDL_API_KEY: ${QUANDL_API_KEY:-}
+
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: achest-caddy
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:4443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - achest_caddy_data:/data
+      - achest_caddy_config:/config
+
+volumes:
+  achest_caddy_data:
+  achest_caddy_config:
