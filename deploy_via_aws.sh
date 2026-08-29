@@ -49,45 +49,37 @@ export APP_DIR='${APP_DIR}'
 export BRANCH='${BRANCH}'
 export REPO_URL='${REPO_URL}'
 
-if [[ -d "\${APP_DIR}" ]] && [[ -f "\${APP_DIR}/Dockerfile" ]] && [[ -f "\${APP_DIR}/docker-compose.ec2.yml" ]] && [[ -d "\${APP_DIR}/achest" ]]; then
-  echo "Using existing app checkout at \${APP_DIR}"
+# --- Ensure the app directory is a proper git repo with latest code ---
+if [[ -d "\${APP_DIR}/.git" ]] && [[ -f "\${APP_DIR}/Dockerfile" ]]; then
+  echo "Updating existing git repo at \${APP_DIR} (branch: \${BRANCH})"
   cd "\${APP_DIR}"
-
-  if git -C "\${APP_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    git -C "\${APP_DIR}" fetch --all --tags || true
-    git -C "\${APP_DIR}" checkout "\${BRANCH}" || true
-    git -C "\${APP_DIR}" pull --ff-only origin "\${BRANCH}" || true
-  else
-    echo "No git repo detected; reusing the existing app copy already on the EC2 instance."
-  fi
+  git fetch --all --tags 2>/dev/null || true
+  git stash 2>/dev/null || true
+  git checkout "\${BRANCH}" 2>/dev/null || git checkout -b "\${BRANCH}" 2>/dev/null || true
+  git pull --ff-only origin "\${BRANCH}" || true
+elif [[ -d "\${APP_DIR}" ]] && [[ -n "\$(ls -A "\${APP_DIR}" 2>/dev/null)" ]]; then
+  echo "Directory exists but not a git repo. Replacing with fresh clone..."
+  sudo rm -rf "\${APP_DIR}"
+  sudo mkdir -p "\${APP_DIR}"
+  sudo chown -R "\$(id -un)":"\$(id -gn)" "\${APP_DIR}"
+  git clone "\${REPO_URL}" "\${APP_DIR}"
+  cd "\${APP_DIR}"
 else
-  if [[ -d "\${APP_DIR}" ]] && [[ -n "\$(ls -A "\${APP_DIR}" 2>/dev/null)" ]]; then
-    echo "Directory exists at \${APP_DIR} but is not a valid app checkout. Reusing current contents without cloning."
-  else
-    if [[ -n "\${REPO_URL}" ]]; then
-      echo "No valid app found at \${APP_DIR}; cloning from GitHub"
-      sudo mkdir -p "\${APP_DIR}"
-      sudo chown -R "\$(id -un)":"\$(id -gn)" "\${APP_DIR}"
-      git clone "\${REPO_URL}" "\${APP_DIR}"
-    else
-      echo "No repo found at \${APP_DIR} and no REPO_URL configured."
-      exit 1
-    fi
-  fi
+  echo "No existing app found. Cloning from GitHub..."
+  sudo mkdir -p "\${APP_DIR}"
+  sudo chown -R "\$(id -un)":"\$(id -gn)" "\${APP_DIR}"
+  git clone "\${REPO_URL}" "\${APP_DIR}"
   cd "\${APP_DIR}"
 fi
 
+# --- Install the .env file (handle root-owned file) ---
+sudo chown "\$(id -un)":"\$(id -gn)" "\${APP_DIR}/.env" 2>/dev/null || true
 cp /tmp/arithmaxchest.env "\${APP_DIR}/.env"
 chmod 600 "\${APP_DIR}/.env"
-chown "\$(id -un)":"\$(id -gn)" "\${APP_DIR}/.env"
 
-cd "\${APP_DIR}"
-set -a
-source "\${APP_DIR}/.env"
-set +a
-: "\${DATA_API_TOKEN:?DATA_API_TOKEN is required}"
-
-if [[ -f "docker-compose.ec2.yml" ]]; then
+# --- Build and restart Docker containers ---
+if [[ -f "\${APP_DIR}/docker-compose.ec2.yml" ]]; then
+  cd "\${APP_DIR}"
   sudo docker compose --env-file .env -f docker-compose.ec2.yml down --remove-orphans || true
   sudo docker compose --env-file .env -f docker-compose.ec2.yml build api
   sudo docker compose --env-file .env -f docker-compose.ec2.yml up -d --force-recreate
@@ -96,7 +88,9 @@ else
   exit 1
 fi
 
+# --- Health check ---
 curl -fsSL "\${APP_HOST}/health"
 EOF
 
+echo ""
 echo "Deployment finished. Confirm health: ${APP_HOST}/health"
