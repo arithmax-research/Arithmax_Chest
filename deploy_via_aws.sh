@@ -4,7 +4,7 @@ set -euo pipefail
 APP_HOST="${APP_HOST:-https://achest.misango.me}"
 APP_DIR="${APP_DIR:-/home/ubuntu/codechest/Arithmax_Chest}"
 BRANCH="${BRANCH:-main}"
-REPO_URL="${REPO_URL:-https://github.com/misango/Arithmax_Chest.git}"
+REPO_URL="${REPO_URL:-https://github.com/arithmax-research/Arithmax_Chest.git}"
 ENV_FILE="${ENV_FILE:-.env}"
 SSH_USER="${SSH_USER:-ubuntu}"
 EC2_HOST="${EC2_HOST:-98.93.200.66}"
