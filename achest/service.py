@@ -202,7 +202,11 @@ def _databento(symbol: str, request: DataRequest) -> pd.DataFrame:
     ).to_df()
     if data.empty:
         return data
-    data = data.rename(columns={"ts_event": "timestamp"}).set_index("timestamp")
+    # Databento OHLCV schemas return timestamp as the index named "ts_event"
+    if "ts_event" in data.columns:
+        data = data.rename(columns={"ts_event": "timestamp"}).set_index("timestamp")
+    elif data.index.name == "ts_event":
+        data.index.name = "timestamp"
     return data[["open", "high", "low", "close", "volume"]]
 
 
