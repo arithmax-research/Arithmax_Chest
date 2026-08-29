@@ -81,7 +81,7 @@ def classify_symbol(symbol: str) -> str:
 
 # Map provider -> env var name for required API key (empty = no key needed)
 _PROVIDER_KEY_MAP = {
-    "databento": "DATABENTO_API_KEY",
+    "databento": "DATA_BENTO_API_KEY",
     "massive": "MASSIVE_API_KEY",
     "alpaca": "ALPACA_API_KEY",
     "tiingo": "TIINGO_API_KEY",
@@ -190,9 +190,9 @@ def _databento(symbol: str, request: DataRequest) -> pd.DataFrame:
     import databento as db
     from databento import Schema, SType
 
-    key = os.getenv("DATABENTO_API_KEY")
+    key = os.getenv("DATA_BENTO_API_KEY")
     if not key:
-        raise RuntimeError("DATABENTO_API_KEY is not configured on the server")
+        raise RuntimeError("DATA_BENTO_API_KEY is not configured on the server")
     continuous = symbol.replace(".FUT", ".c.0")
     schema = {"tick": Schema.MBP_1, "second": Schema.OHLCV_1S, "minute": Schema.OHLCV_1M, "hour": Schema.OHLCV_1H, "daily": Schema.OHLCV_1D}[request.resolution]
     data = db.Historical(key=key).timeseries.get_range(
