@@ -80,9 +80,11 @@ chmod 600 "\${APP_DIR}/.env"
 # --- Build and restart Docker containers ---
 if [[ -f "\${APP_DIR}/docker-compose.ec2.yml" ]]; then
   cd "\${APP_DIR}"
-  sudo docker compose --env-file .env -f docker-compose.ec2.yml down --remove-orphans || true
+  sudo docker compose --env-file .env -f docker-compose.ec2.yml down --remove-orphans --volumes 2>/dev/null || true
+  # Force-remove any stale containers that might have been left behind (name conflict guard)
+  sudo docker rm -f achest-api achest-caddy 2>/dev/null || true
   sudo docker compose --env-file .env -f docker-compose.ec2.yml build api
-  sudo docker compose --env-file .env -f docker-compose.ec2.yml up -d --force-recreate
+  sudo docker compose --env-file .env -f docker-compose.ec2.yml up -d --force-recreate --remove-orphans
 else
   echo "docker-compose.ec2.yml not found in \${APP_DIR}; exiting without changing the running container."
   exit 1
