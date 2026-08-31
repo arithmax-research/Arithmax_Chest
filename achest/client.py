@@ -4,6 +4,7 @@ from datetime import date
 from io import BytesIO
 from pathlib import Path
 from typing import Iterable
+import time
 import zipfile
 
 import httpx
@@ -12,6 +13,13 @@ import pandas as pd
 from .service import to_q_table
 
 _DEFAULT_BASE_URL = "https://achest.misango.me"
+
+#: Transport-level exceptions that are safe to retry (transient network/SSL failures).
+_RETRYABLE_EXCEPTIONS = (
+    httpx.ConnectError,
+    httpx.TimeoutException,
+    httpx.RemoteProtocolError,
+)
 
 
 def _read_lean_zip(zip_bytes: bytes) -> pd.DataFrame:
@@ -22,8 +30,24 @@ def _read_lean_zip(zip_bytes: bytes) -> pd.DataFrame:
             if not name.endswith(".csv"):
                 continue
             parts = name.split("/")
-            # Path structure: {asset}/{market}/{resolution}/{symbol}/{date}_{symbol}_{resolution}_trade.csv
-            symbol_from_path = parts[-2] if len(parts) >= 2 else "unknown"
+            fname = parts[-1]
+            # Support two path layouts:
+            #   OLD: {asset}/{market}/{resolution}/{symbol}/{date}_{symbol}_{resolution}_trade.csv
+            #   NEW: {asset}/{market}/{resolution}/{symbol}_{resolution}_trade.csv
+            if len(parts) >= 4:
+                # New format: symbol is embedded in the CSV filename before the resolution.
+                # e.g. "trxusdt_hour_trade.csv" -> symbol = "trxusdt"
+                tokens = fname.replace(".csv", "").split("_")
+                # tokens: [symbol, resolution, (quote|trade)]  or  [date, symbol, resolution, (quote|trade)]
+                if tokens[0].isdigit() and len(tokens) >= 4:
+                    symbol_from_path = tokens[1].upper()
+                elif not tokens[0].isdigit() and len(tokens) >= 3:
+                    symbol_from_path = tokens[0].upper()
+                else:
+                    symbol_from_path = "UNKNOWN"
+            else:
+                symbol_from_path = parts[-2] if len(parts) >= 2 else "unknown"
+
             df = pd.read_csv(zf.open(name))
             df["symbol"] = symbol_from_path
             # Parse the Lean time column
@@ -43,13 +67,50 @@ def _read_lean_zip(zip_bytes: bytes) -> pd.DataFrame:
 
 
 class MarketDataClient:
-    def __init__(self, base_url: str | None = None, token: str | None = None, timeout: float = 300.0):
+    def __init__(
+        self,
+        base_url: str | None = None,
+        token: str | None = None,
+        timeout: float = 300.0,
+        max_retries: int = 3,
+        retry_delay: float = 1.0,
+    ):
         final_base_url = (base_url or _DEFAULT_BASE_URL).rstrip("/")
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         self.client = httpx.Client(base_url=final_base_url, headers=headers, timeout=timeout)
+        self._max_retries = max_retries
+        self._retry_delay = retry_delay
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
+        """Send an HTTP request, retrying on transient transport errors.
+
+        Retries with exponential backoff for ``ConnectError``,
+        ``TimeoutException``, and ``RemoteProtocolError``.  Non-2xx
+        HTTP statuses are **not** retried — they raise immediately.
+        """
+        last_exc: Exception | None = None
+        for attempt in range(self._max_retries):
+            try:
+                return getattr(self.client, method)(path, **kwargs)
+            except _RETRYABLE_EXCEPTIONS as exc:
+                last_exc = exc
+                if attempt < self._max_retries - 1:
+                    time.sleep(self._retry_delay * (2**attempt))
+                    continue
+                raise
+        # Should never reach here, but keeps type-checkers happy
+        raise RuntimeError("unreachable") from last_exc
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
     def route(self, symbol: str, resolution: str = "daily", provider: str = "auto") -> dict:
-        response = self.client.get("/v1/route", params={"symbol": symbol, "resolution": resolution, "provider": provider})
+        response = self._request("get", "/v1/route", params={"symbol": symbol, "resolution": resolution, "provider": provider})
         response.raise_for_status()
         return response.json()
 
@@ -70,7 +131,7 @@ class MarketDataClient:
             "provider": provider,
             "format": format,
         }
-        response = self.client.post("/v1/data", json=body)
+        response = self._request("post", "/v1/data", json=body)
         response.raise_for_status()
 
         if format == "lean":
@@ -100,7 +161,7 @@ class MarketDataClient:
             "provider": provider,
             "format": format,
         }
-        response = self.client.post("/v1/data", json=body)
+        response = self._request("post", "/v1/data", json=body)
         response.raise_for_status()
 
         if format == "lean":

@@ -362,11 +362,12 @@ def to_lean_zip(frame: pd.DataFrame, resolution: str) -> bytes:
 
     Internal path structure mirrors the Lean data-folder layout::
 
-        {asset_type}/{market}/{resolution}/{symbol}/{date}_{symbol}_{resolution}_trade.csv
+        {asset_type}/{market}/{resolution}/{symbol}_{resolution}_{type}.csv
 
-    Returns the raw zip bytes.
+    Each symbol produces one merged CSV (all dates combined) — matching the
+    format that LEAN expects at the resolution level (e.g. ``btcusdt_hour_trade.zip``
+    containing ``btcusdt_hour_trade.csv``).
     """
-    from datetime import datetime as dt_mod
     from io import BytesIO
     import zipfile
 
@@ -392,47 +393,48 @@ def to_lean_zip(frame: pd.DataFrame, resolution: str) -> bytes:
             market = market_map.get(asset_type, "usa")
             asset_dir = {"economic": "alternative"}.get(asset_type, asset_type)
 
-            base = f"{asset_dir}/{market}/{resolution}/{lean_sym.lower() if asset_type == 'crypto' else lean_sym}"
+            # Place CSV directly at the resolution level (not in a symbol subdir).
+            base = f"{asset_dir}/{market}/{resolution}"
 
             # Price multiplier: 10 000 for equity / index / futures
             multiplier = _LEAN_PRICE_MULTIPLIER if asset_type in ("equity", "index", "futures") else 1
 
             group_sorted = group.sort_index()
-            for date_val, day_group in group_sorted.groupby(group_sorted.index.date):
-                date_str = dt_mod.combine(date_val, dt_mod.min.time()).strftime("%Y%m%d")
-                lines = ["Time,Open,High,Low,Close,Volume"]
+            lines = ["Time,Open,High,Low,Close,Volume"]
 
-                for ts, row in day_group.iterrows():
-                    ts_dt = ts.to_pydatetime()
+            for ts, row in group_sorted.iterrows():
+                ts_dt = ts.to_pydatetime()
 
-                    # Time column format
-                    if asset_type == "crypto" or resolution == "daily":
-                        time_str = ts_dt.strftime("%Y%m%d %H:%M")
-                    else:
-                        time_str = str(_milliseconds_since_midnight(ts_dt))
+                # Time column format
+                if asset_type == "crypto" or resolution == "daily":
+                    time_str = ts_dt.strftime("%Y%m%d %H:%M")
+                else:
+                    time_str = str(_milliseconds_since_midnight(ts_dt))
 
-                    o, h, l, c = (
-                        float(row["open"]),
-                        float(row["high"]),
-                        float(row["low"]),
-                        float(row["close"]),
+                o, h, l, c = (
+                    float(row["open"]),
+                    float(row["high"]),
+                    float(row["low"]),
+                    float(row["close"]),
+                )
+                v = int(float(row["volume"]))
+
+                if multiplier == 1:
+                    lines.append(f"{time_str},{o},{h},{l},{c},{v}")
+                else:
+                    lines.append(
+                        f"{time_str},"
+                        f"{int(round(o * multiplier))},"
+                        f"{int(round(h * multiplier))},"
+                        f"{int(round(l * multiplier))},"
+                        f"{int(round(c * multiplier))},"
+                        f"{v}"
                     )
-                    v = int(float(row["volume"]))
 
-                    if multiplier == 1:
-                        lines.append(f"{time_str},{o},{h},{l},{c},{v}")
-                    else:
-                        lines.append(
-                            f"{time_str},"
-                            f"{int(round(o * multiplier))},"
-                            f"{int(round(h * multiplier))},"
-                            f"{int(round(l * multiplier))},"
-                            f"{int(round(c * multiplier))},"
-                            f"{v}"
-                        )
-
-                csv_path = f"{base}/{date_str}_{lean_sym.lower()}_{resolution}_trade.csv"
-                zf.writestr(csv_path, "\n".join(lines))
+            # Single merged CSV per symbol (all dates), e.g. "trxusdt_hour_trade.csv"
+            csv_name = f"{lean_sym.lower()}_{resolution}_trade.csv"
+            csv_path = f"{base}/{csv_name}"
+            zf.writestr(csv_path, "\n".join(lines))
 
     return buffer.getvalue()
 
