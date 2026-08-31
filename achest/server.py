@@ -4,6 +4,8 @@ from datetime import date
 from io import BytesIO
 import os
 
+import zipfile
+
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import Response
@@ -85,9 +87,14 @@ def data(request: DownloadRequest) -> Response:
         if request.format == "csv":
             return Response(table.to_csv(index=False), media_type="text/csv")
         if request.format == "lean":
-            zip_bytes = to_lean_zip(table.set_index("timestamp"), request.resolution)
+            per_symbol_zips = to_lean_zip(table.set_index("timestamp"), request.resolution)
+            # Wrap individual per-symbol zips into one outer zip for HTTP transport.
+            outer_buf = BytesIO()
+            with zipfile.ZipFile(outer_buf, "w", zipfile.ZIP_DEFLATED) as outer_zf:
+                for zip_name, zip_bytes in per_symbol_zips.items():
+                    outer_zf.writestr(zip_name, zip_bytes)
             return Response(
-                zip_bytes,
+                outer_buf.getvalue(),
                 media_type="application/zip",
                 headers={"Content-Disposition": "attachment; filename=market-data-lean.zip"},
             )

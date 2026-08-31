@@ -23,44 +23,37 @@ _RETRYABLE_EXCEPTIONS = (
 
 
 def _read_lean_zip(zip_bytes: bytes) -> pd.DataFrame:
-    """Parse a Lean-format zip file back into a pandas DataFrame."""
-    frames = []
-    with zipfile.ZipFile(BytesIO(zip_bytes)) as zf:
-        for name in zf.namelist():
-            if not name.endswith(".csv"):
-                continue
-            parts = name.split("/")
-            fname = parts[-1]
-            # Support two path layouts:
-            #   OLD: {asset}/{market}/{resolution}/{symbol}/{date}_{symbol}_{resolution}_trade.csv
-            #   NEW: {asset}/{market}/{resolution}/{symbol}_{resolution}_trade.csv
-            if len(parts) >= 4:
-                # New format: symbol is embedded in the CSV filename before the resolution.
-                # e.g. "trxusdt_hour_trade.csv" -> symbol = "trxusdt"
-                tokens = fname.replace(".csv", "").split("_")
-                # tokens: [symbol, resolution, (quote|trade)]  or  [date, symbol, resolution, (quote|trade)]
-                if tokens[0].isdigit() and len(tokens) >= 4:
-                    symbol_from_path = tokens[1].upper()
-                elif not tokens[0].isdigit() and len(tokens) >= 3:
-                    symbol_from_path = tokens[0].upper()
-                else:
-                    symbol_from_path = "UNKNOWN"
-            else:
-                symbol_from_path = parts[-2] if len(parts) >= 2 else "unknown"
+    """Parse a Lean-format zip-of-zips back into a pandas DataFrame.
 
-            df = pd.read_csv(zf.open(name))
-            df["symbol"] = symbol_from_path
-            # Parse the Lean time column
-            raw = df["Time"].astype(str)
-            # Try ISO-like or YYYYMMDD HH:MM format
-            parsed = pd.to_datetime(raw, format="%Y%m%d %H:%M", errors="coerce")
-            # If parsing failed, maybe it's milliseconds-since-midnight
-            if parsed.isna().all():
-                parsed = pd.to_numeric(raw, errors="coerce")
-                parsed = pd.to_datetime(parsed, unit="ms", origin="unix", errors="coerce")
-            df["timestamp"] = parsed
-            df = df.drop(columns=["Time"])
-            frames.append(df)
+    The server returns an outer zip containing individual per-symbol zips
+    (e.g. ``btcusdt_trade.zip``).  Each inner zip holds a single merged CSV
+    with columns ``Time,Open,High,Low,Close,Volume``.
+    """
+    frames = []
+    with zipfile.ZipFile(BytesIO(zip_bytes)) as outer_zf:
+        for inner_name in outer_zf.namelist():
+            if not inner_name.endswith(".zip"):
+                continue
+            inner_bytes = outer_zf.read(inner_name)
+            with zipfile.ZipFile(BytesIO(inner_bytes)) as inner_zf:
+                for csv_name in inner_zf.namelist():
+                    if not csv_name.endswith(".csv"):
+                        continue
+                    # Extract symbol from the CSV filename: "btcusdt_hour_trade.csv" → "BTCUSDT"
+                    tokens = csv_name.replace(".csv", "").split("_")
+                    symbol_from_path = tokens[0].upper() if tokens else "UNKNOWN"
+
+                    df = pd.read_csv(inner_zf.open(csv_name))
+                    df["symbol"] = symbol_from_path
+                    # Parse the Lean time column
+                    raw = df["Time"].astype(str)
+                    parsed = pd.to_datetime(raw, format="%Y%m%d %H:%M", errors="coerce")
+                    if parsed.isna().all():
+                        parsed = pd.to_numeric(raw, errors="coerce")
+                        parsed = pd.to_datetime(parsed, unit="ms", origin="unix", errors="coerce")
+                    df["timestamp"] = parsed
+                    df = df.drop(columns=["Time"])
+                    frames.append(df)
     if frames:
         return pd.concat(frames, ignore_index=True)
     return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume", "symbol", "timestamp"])
@@ -135,10 +128,7 @@ class MarketDataClient:
         response.raise_for_status()
 
         if format == "lean":
-            zip_bytes = BytesIO(response.content)
-            data_root = Path.cwd() / "data"
-            with zipfile.ZipFile(zip_bytes) as zf:
-                zf.extractall(data_root)
+            # Server returns a zip-of-zips. Extract inner zips and read CSVs.
             return _read_lean_zip(response.content)
 
         return pd.DataFrame(response.json())
@@ -167,8 +157,13 @@ class MarketDataClient:
         if format == "lean":
             data_dir = Path(output)
             data_dir.mkdir(parents=True, exist_ok=True)
-            with zipfile.ZipFile(BytesIO(response.content)) as zf:
-                zf.extractall(data_dir)
+            # Server returns a zip-of-zips: extract each inner zip and save it.
+            with zipfile.ZipFile(BytesIO(response.content)) as outer_zf:
+                for zip_name in outer_zf.namelist():
+                    if not zip_name.endswith(".zip"):
+                        continue
+                    inner_bytes = outer_zf.read(zip_name)
+                    (data_dir / zip_name).write_bytes(inner_bytes)
             return data_dir
 
         destination = Path(output)

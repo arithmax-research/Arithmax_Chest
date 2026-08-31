@@ -357,86 +357,78 @@ def _lean_symbol(symbol: str, asset_type: str) -> str:
     return clean
 
 
-def to_lean_zip(frame: pd.DataFrame, resolution: str) -> bytes:
-    """Convert a DataFrame to a zip of Lean-formatted CSV files.
+def to_lean_zip(frame: pd.DataFrame, resolution: str) -> dict[str, bytes]:
+    """Convert a DataFrame to individual per-symbol Lean-formatted zip files.
 
-    Internal path structure mirrors the Lean data-folder layout::
+    Returns a dict keyed by zip filename (e.g. ``btcusdt_trade.zip``) with the
+    zip bytes as the value — matching the format that LEAN expects at the
+    resolution level::
 
-        {asset_type}/{market}/{resolution}/{symbol}_{resolution}_{type}.csv
+        {symbol}_{type}.zip  ─→  {symbol}_{resolution}_{type}.csv
 
-    Each symbol produces one merged CSV (all dates combined) — matching the
-    format that LEAN expects at the resolution level (e.g. ``btcusdt_hour_trade.zip``
-    containing ``btcusdt_hour_trade.csv``).
+    The *data type* is hard-coded as ``trade`` (the API always returns trade
+    bars).  If the DataFrame contains quote columns in the future, a separate
+    ``quote`` zip can be generated.
     """
     from io import BytesIO
     import zipfile
 
     if frame.empty:
-        return b""
+        return {}
 
-    buffer = BytesIO()
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        for symbol, group in frame.groupby("symbol"):
-            asset_type = classify_symbol(symbol)
-            lean_sym = _lean_symbol(symbol, asset_type)
+    result: dict[str, bytes] = {}
+    for symbol, group in frame.groupby("symbol"):
+        asset_type = classify_symbol(symbol)
+        lean_sym = _lean_symbol(symbol, asset_type)
 
-            # Determine market sub-directory (matching config.py from Data_Pipeline)
-            market_map = {
-                "crypto": "binance",
-                "equity": "usa",
-                "futures": "usa",
-                "index": "usa",
-                "economic": "interest-rate",
-                "forex": "oanda",
-                "cfd": "oanda",
-            }
-            market = market_map.get(asset_type, "usa")
-            asset_dir = {"economic": "alternative"}.get(asset_type, asset_type)
+        # Price multiplier: 10 000 for equity / index / futures
+        multiplier = _LEAN_PRICE_MULTIPLIER if asset_type in ("equity", "index", "futures") else 1
 
-            # Place CSV directly at the resolution level (not in a symbol subdir).
-            base = f"{asset_dir}/{market}/{resolution}"
+        group_sorted = group.sort_index()
+        lines = ["Time,Open,High,Low,Close,Volume"]
 
-            # Price multiplier: 10 000 for equity / index / futures
-            multiplier = _LEAN_PRICE_MULTIPLIER if asset_type in ("equity", "index", "futures") else 1
+        for ts, row in group_sorted.iterrows():
+            ts_dt = ts.to_pydatetime()
 
-            group_sorted = group.sort_index()
-            lines = ["Time,Open,High,Low,Close,Volume"]
+            # Time column format
+            if asset_type == "crypto" or resolution == "daily":
+                time_str = ts_dt.strftime("%Y%m%d %H:%M")
+            else:
+                time_str = str(_milliseconds_since_midnight(ts_dt))
 
-            for ts, row in group_sorted.iterrows():
-                ts_dt = ts.to_pydatetime()
+            o, h, l, c = (
+                float(row["open"]),
+                float(row["high"]),
+                float(row["low"]),
+                float(row["close"]),
+            )
+            v = int(float(row["volume"]))
 
-                # Time column format
-                if asset_type == "crypto" or resolution == "daily":
-                    time_str = ts_dt.strftime("%Y%m%d %H:%M")
-                else:
-                    time_str = str(_milliseconds_since_midnight(ts_dt))
-
-                o, h, l, c = (
-                    float(row["open"]),
-                    float(row["high"]),
-                    float(row["low"]),
-                    float(row["close"]),
+            if multiplier == 1:
+                lines.append(f"{time_str},{o},{h},{l},{c},{v}")
+            else:
+                lines.append(
+                    f"{time_str},"
+                    f"{int(round(o * multiplier))},"
+                    f"{int(round(h * multiplier))},"
+                    f"{int(round(l * multiplier))},"
+                    f"{int(round(c * multiplier))},"
+                    f"{v}"
                 )
-                v = int(float(row["volume"]))
 
-                if multiplier == 1:
-                    lines.append(f"{time_str},{o},{h},{l},{c},{v}")
-                else:
-                    lines.append(
-                        f"{time_str},"
-                        f"{int(round(o * multiplier))},"
-                        f"{int(round(h * multiplier))},"
-                        f"{int(round(l * multiplier))},"
-                        f"{int(round(c * multiplier))},"
-                        f"{v}"
-                    )
+        # Build the individual zip for this symbol
+        #   zip name :  btcusdt_trade.zip
+        #   csv inside: btcusdt_hour_trade.csv
+        clean_sym = lean_sym.lower()
+        csv_name = f"{clean_sym}_{resolution}_trade.csv"
+        zip_name = f"{clean_sym}_trade.zip"
 
-            # Single merged CSV per symbol (all dates), e.g. "trxusdt_hour_trade.csv"
-            csv_name = f"{lean_sym.lower()}_{resolution}_trade.csv"
-            csv_path = f"{base}/{csv_name}"
-            zf.writestr(csv_path, "\n".join(lines))
+        buf = BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(csv_name, "\n".join(lines))
+        result[zip_name] = buf.getvalue()
 
-    return buffer.getvalue()
+    return result
 
 
 def _q_literal(value):
