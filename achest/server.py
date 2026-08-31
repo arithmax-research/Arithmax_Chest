@@ -9,7 +9,14 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
 
-from .service import PROVIDER_CAPABILITIES, DataRequest, UnsupportedRequest, fetch, select_provider
+from .service import (
+    PROVIDER_CAPABILITIES,
+    DataRequest,
+    UnsupportedRequest,
+    fetch,
+    select_provider,
+    to_lean_zip,
+)
 
 load_dotenv()
 app = FastAPI(title="Central Market Data API", version="0.2.0")
@@ -33,8 +40,8 @@ class DownloadRequest(BaseModel):
     @field_validator("format")
     @classmethod
     def valid_format(cls, value: str) -> str:
-        if value not in {"json", "csv", "parquet"}:
-            raise ValueError("format must be json, csv, or parquet")
+        if value not in {"json", "csv", "parquet", "lean"}:
+            raise ValueError("format must be json, csv, parquet, or lean")
         return value
 
 
@@ -76,6 +83,13 @@ def data(request: DownloadRequest) -> Response:
         return Response(table.to_json(orient="records", date_format="iso"), media_type="application/json")
     if request.format == "csv":
         return Response(table.to_csv(index=False), media_type="text/csv")
+    if request.format == "lean":
+        zip_bytes = to_lean_zip(table.set_index("timestamp"), request.resolution)
+        return Response(
+            zip_bytes,
+            media_type="application/zip",
+            headers={"Content-Disposition": "attachment; filename=market-data-lean.zip"},
+        )
     output = BytesIO()
     table.to_parquet(output, index=False)
     return Response(output.getvalue(), media_type="application/octet-stream", headers={"Content-Disposition": "attachment; filename=market-data.parquet"})

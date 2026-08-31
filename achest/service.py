@@ -332,6 +332,111 @@ def fetch(request: DataRequest) -> pd.DataFrame:
     return pd.concat(frames).sort_index()
 
 
+# ── Lean format helpers ──────────────────────────────────────────────
+_LEAN_PRICE_MULTIPLIER = 10000  # deci-cents for equity/futures
+
+
+def _milliseconds_since_midnight(dt: datetime) -> int:
+    midnight = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    return int((dt - midnight).total_seconds() * 1000)
+
+
+def _lean_symbol(symbol: str, asset_type: str) -> str:
+    """Append asset-type suffix for QuantConnect Lean compatibility."""
+    clean = symbol.strip().upper()
+    suffixes = {
+        "equity": "_EQUITY",
+        "forex": "_FOREX",
+        "crypto": "_CRYPTO",
+        "index": "_INDEX",
+        "cfd": "_CFD",
+    }
+    suffix = suffixes.get(asset_type, "")
+    if suffix and not clean.endswith(suffix):
+        clean += suffix
+    return clean
+
+
+def to_lean_zip(frame: pd.DataFrame, resolution: str) -> bytes:
+    """Convert a DataFrame to a zip of Lean-formatted CSV files.
+
+    Internal path structure mirrors the Lean data-folder layout::
+
+        {asset_type}/{market}/{resolution}/{symbol}/{date}_{symbol}_{resolution}_trade.csv
+
+    Returns the raw zip bytes.
+    """
+    from datetime import datetime as dt_mod
+    from io import BytesIO
+    import zipfile
+
+    if frame.empty:
+        return b""
+
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for symbol, group in frame.groupby("symbol"):
+            asset_type = classify_symbol(symbol)
+            lean_sym = _lean_symbol(symbol, asset_type)
+
+            # Determine market sub-directory (matching config.py from Data_Pipeline)
+            market_map = {
+                "crypto": "binance",
+                "equity": "usa",
+                "futures": "usa",
+                "index": "usa",
+                "economic": "interest-rate",
+                "forex": "oanda",
+                "cfd": "oanda",
+            }
+            market = market_map.get(asset_type, "usa")
+            asset_dir = {"economic": "alternative"}.get(asset_type, asset_type)
+
+            base = f"{asset_dir}/{market}/{resolution}/{lean_sym.lower() if asset_type == 'crypto' else lean_sym}"
+
+            # Price multiplier: 10 000 for equity / index / futures
+            multiplier = _LEAN_PRICE_MULTIPLIER if asset_type in ("equity", "index", "futures") else 1
+
+            group_sorted = group.sort_index()
+            for date_val, day_group in group_sorted.groupby(group_sorted.index.date):
+                date_str = dt_mod.combine(date_val, dt_mod.min.time()).strftime("%Y%m%d")
+                lines = ["Time,Open,High,Low,Close,Volume"]
+
+                for ts, row in day_group.iterrows():
+                    ts_dt = ts.to_pydatetime()
+
+                    # Time column format
+                    if asset_type == "crypto" or resolution == "daily":
+                        time_str = ts_dt.strftime("%Y%m%d %H:%M")
+                    else:
+                        time_str = str(_milliseconds_since_midnight(ts_dt))
+
+                    o, h, l, c = (
+                        float(row["open"]),
+                        float(row["high"]),
+                        float(row["low"]),
+                        float(row["close"]),
+                    )
+                    v = int(row["volume"])
+
+                    if multiplier == 1:
+                        lines.append(f"{time_str},{o},{h},{l},{c},{v}")
+                    else:
+                        lines.append(
+                            f"{time_str},"
+                            f"{int(round(o * multiplier))},"
+                            f"{int(round(h * multiplier))},"
+                            f"{int(round(l * multiplier))},"
+                            f"{int(round(c * multiplier))},"
+                            f"{v}"
+                        )
+
+                csv_path = f"{base}/{date_str}_{lean_sym.lower()}_{resolution}_trade.csv"
+                zf.writestr(csv_path, "\n".join(lines))
+
+    return buffer.getvalue()
+
+
 def _q_literal(value):
     if pd.isna(value):
         return "0n"
