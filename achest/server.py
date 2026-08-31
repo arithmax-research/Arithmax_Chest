@@ -79,17 +79,20 @@ def data(request: DownloadRequest) -> Response:
     except Exception as error:
         raise HTTPException(status_code=502, detail=f"provider request failed: {error}") from error
     table = frame.reset_index(names="timestamp")
-    if request.format == "json":
-        return Response(table.to_json(orient="records", date_format="iso"), media_type="application/json")
-    if request.format == "csv":
-        return Response(table.to_csv(index=False), media_type="text/csv")
-    if request.format == "lean":
-        zip_bytes = to_lean_zip(table.set_index("timestamp"), request.resolution)
-        return Response(
-            zip_bytes,
-            media_type="application/zip",
-            headers={"Content-Disposition": "attachment; filename=market-data-lean.zip"},
-        )
-    output = BytesIO()
-    table.to_parquet(output, index=False)
-    return Response(output.getvalue(), media_type="application/octet-stream", headers={"Content-Disposition": "attachment; filename=market-data.parquet"})
+    try:
+        if request.format == "json":
+            return Response(table.to_json(orient="records", date_format="iso"), media_type="application/json")
+        if request.format == "csv":
+            return Response(table.to_csv(index=False), media_type="text/csv")
+        if request.format == "lean":
+            zip_bytes = to_lean_zip(table.set_index("timestamp"), request.resolution)
+            return Response(
+                zip_bytes,
+                media_type="application/zip",
+                headers={"Content-Disposition": "attachment; filename=market-data-lean.zip"},
+            )
+        output = BytesIO()
+        table.to_parquet(output, index=False)
+        return Response(output.getvalue(), media_type="application/octet-stream", headers={"Content-Disposition": "attachment; filename=market-data.parquet"})
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f"output serialization failed: {error}") from error

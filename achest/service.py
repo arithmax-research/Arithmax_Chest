@@ -417,7 +417,7 @@ def to_lean_zip(frame: pd.DataFrame, resolution: str) -> bytes:
                         float(row["low"]),
                         float(row["close"]),
                     )
-                    v = int(row["volume"])
+                    v = int(float(row["volume"]))
 
                     if multiplier == 1:
                         lines.append(f"{time_str},{o},{h},{l},{c},{v}")
