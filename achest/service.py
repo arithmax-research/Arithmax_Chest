@@ -163,10 +163,13 @@ def _binance(symbol: str, request: DataRequest) -> pd.DataFrame:
 
     base_url = os.getenv("BINANCE_BASE_URL", "https://api.binance.com").rstrip("/")
     api_key = os.getenv("BINANCE_API_KEY")
+    proxy_url = os.getenv("BINANCE_PROXY") or os.getenv("HTTPS_PROXY")
     # Use a shared session for connection pooling across all threads
     session = requests.Session()
     if api_key:
         session.headers.update({"X-MBX-APIKEY": api_key})
+    if proxy_url:
+        session.proxies.update({"https": proxy_url, "http": proxy_url})
 
     start_ms = int(_as_datetime(request.start).timestamp() * 1000)
     end_ms = int(_as_datetime(request.end, True).timestamp() * 1000)
