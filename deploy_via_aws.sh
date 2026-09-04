@@ -103,7 +103,7 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
     echo "Health check passed on \${APP_HOST}/health"
     break
   fi
-  echo "Attempt $i/10 - not ready yet, sleeping 3s..."
+  echo "Attempt \$i/10 - not ready yet, sleeping 3s..."
   sleep 3
 done
 curl -fsSL "\${APP_HOST}/health" || true
