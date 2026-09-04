@@ -323,7 +323,9 @@ def _tiingo(symbol: str, request: DataRequest) -> pd.DataFrame:
     if not key:
         raise RuntimeError("TIINGO_API_KEY is not configured")
     freq = {"tick": "tick", "second": "1sec", "minute": "1min", "hour": "1hour", "daily": "daily"}[request.resolution]
-    url = f"https://api.tiingo.com/tiingo/{'crypto' if 'USDT' in symbol or 'USD' in symbol else 'daily'}/{symbol}/prices"
+    # Tiingo crypto API expects lowercase tickers
+    ticker = symbol.lower() if "USDT" in symbol or "USD" in symbol else symbol
+    url = f"https://api.tiingo.com/tiingo/{'crypto' if 'USDT' in symbol or 'USD' in symbol else 'daily'}/{ticker}/prices"
     response = requests.get(url, params={
         "startDate": request.start.isoformat(), "endDate": request.end.isoformat(), "resampleFreq": freq,
     }, headers={"Authorization": f"Token {key}"}, timeout=60)
