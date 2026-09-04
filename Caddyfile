@@ -1,8 +1,4 @@
-{
-    acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
-}
-
-achest.misango.me {
+achestv2.misango.me {
     encode gzip
     reverse_proxy api:8000
 }
