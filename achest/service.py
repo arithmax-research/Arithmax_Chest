@@ -139,9 +139,15 @@ def _frame_from_bars(bars: Iterable[dict]) -> pd.DataFrame:
 def _yahoo(symbol: str, request: DataRequest) -> pd.DataFrame:
     import yfinance as yf
 
+    # yfinance treats its ``end`` parameter as *exclusive* (like SQL ``<``),
+    # not inclusive.  Bump by one day so the API's inclusive contract is
+    # honoured: ``request.end`` itself is included in the result.
+    from datetime import timedelta
+    adjusted_end = (request.end + timedelta(days=1)).isoformat()
+
     interval = {"minute": "1m", "hour": "1h", "daily": "1d"}[request.resolution]
     history = yf.Ticker(symbol).history(
-        start=request.start.isoformat(), end=request.end.isoformat(), interval=interval, auto_adjust=False
+        start=request.start.isoformat(), end=adjusted_end, interval=interval, auto_adjust=False
     )
     if history.empty:
         return pd.DataFrame()
@@ -409,33 +415,28 @@ def _milliseconds_since_midnight(dt: datetime) -> int:
 
 
 def _lean_symbol(symbol: str, asset_type: str) -> str:
-    """Append asset-type suffix for QuantConnect Lean compatibility."""
-    clean = symbol.strip().upper()
-    suffixes = {
-        "equity": "_EQUITY",
-        "forex": "_FOREX",
-        "crypto": "_CRYPTO",
-        "index": "_INDEX",
-        "cfd": "_CFD",
-    }
-    suffix = suffixes.get(asset_type, "")
-    if suffix and not clean.endswith(suffix):
-        clean += suffix
-    return clean
+    """Normalize a symbol for QuantConnect Lean compatibility.
+
+    Returns the uppercased, stripped symbol — no asset-type suffix
+    appended, matching the convention used by the reference data files
+    under ``Data/`` (e.g. ``spy.zip`` → ``spy_daily_trade.csv``).
+    """
+    return symbol.strip().upper()
 
 
 def to_lean_zip(frame: pd.DataFrame, resolution: str) -> dict[str, bytes]:
-    """Convert a DataFrame to individual per-symbol Lean-formatted zip files.
+    """Convert a DataFrame to Lean-format per-symbol zip files.
 
-    Returns a dict keyed by zip filename (e.g. ``btcusdt_trade.zip``) with the
-    zip bytes as the value — matching the format that LEAN expects at the
-    resolution level::
+    Returns a dict keyed by zip filename (e.g. ``spy.zip``) with the zip
+    bytes as the value — matching the Lean directory convention::
 
-        {symbol}_{type}.zip  ─→  {symbol}_{resolution}_{type}.csv
+        {symbol}.zip  ─→  {symbol}_{resolution}_trade.csv
 
     The *data type* is hard-coded as ``trade`` (the API always returns trade
-    bars).  If the DataFrame contains quote columns in the future, a separate
-    ``quote`` zip can be generated.
+    bars).  Timestamps for daily-resolution data are normalized to midnight
+    (``00:00``) to match the reference files under ``Data/``.  If the
+    DataFrame contains quote columns in the future, a separate ``quote``
+    zip can be generated.
     """
     from io import BytesIO
     import zipfile
@@ -456,6 +457,10 @@ def to_lean_zip(frame: pd.DataFrame, resolution: str) -> dict[str, bytes]:
 
         for ts, row in group_sorted.iterrows():
             ts_dt = ts.to_pydatetime()
+
+            # Normalize to midnight for daily data (matches reference format)
+            if resolution == "daily":
+                ts_dt = ts_dt.replace(hour=0, minute=0, second=0, microsecond=0)
 
             # Time column format
             if asset_type == "crypto" or resolution == "daily":
@@ -484,11 +489,11 @@ def to_lean_zip(frame: pd.DataFrame, resolution: str) -> dict[str, bytes]:
                 )
 
         # Build the individual zip for this symbol
-        #   zip name :  btcusdt_trade.zip
-        #   csv inside: btcusdt_hour_trade.csv
+        #   zip name :  spy.zip
+        #   csv inside: spy_daily_trade.csv
         clean_sym = lean_sym.lower()
         csv_name = f"{clean_sym}_{resolution}_trade.csv"
-        zip_name = f"{clean_sym}_trade.zip"
+        zip_name = f"{clean_sym}.zip"
 
         buf = BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:

@@ -10,7 +10,7 @@ import zipfile
 import httpx
 import pandas as pd
 
-from .service import to_q_table
+from .service import classify_symbol, to_q_table
 
 _DEFAULT_BASE_URL = "https://achestv2.misango.me"
 
@@ -22,11 +22,36 @@ _RETRYABLE_EXCEPTIONS = (
 )
 
 
+def _default_output_path(symbols: list[str], resolution: str) -> Path:
+    """Derive a sensible output-directory path from symbol types and resolution.
+
+    Uses the same convention as the repo's ``Data/`` directory layout::
+
+        Data/equity/usa/{resolution}/   for equities
+        Data/crypto/{resolution}/       for crypto
+        Data/futures/{resolution}/      for futures
+        Data/forex/{resolution}/        for forex
+        Data/other/{resolution}/        for everything else
+    """
+    if not symbols:
+        return Path.cwd()
+    # Classify the first symbol to pick the directory
+    asset_type = classify_symbol(symbols[0])
+    market = {
+        "equity": "equity/usa",
+        "etf": "equity/usa",
+        "index": "equity/usa",
+        "crypto": "crypto",
+        "futures": "futures",
+        "forex": "forex",
+        "economic": "other",
+    }.get(asset_type, "other")
+    return Path("Data") / market / resolution
 def _read_lean_zip(zip_bytes: bytes) -> pd.DataFrame:
     """Parse a Lean-format zip-of-zips back into a pandas DataFrame.
 
     The server returns an outer zip containing individual per-symbol zips
-    (e.g. ``btcusdt_trade.zip``).  Each inner zip holds a single merged CSV
+    (e.g. ``spy.zip``).  Each inner zip holds a single merged CSV
     with columns ``Time,Open,High,Low,Close,Volume``.
     """
     frames = []
@@ -39,7 +64,7 @@ def _read_lean_zip(zip_bytes: bytes) -> pd.DataFrame:
                 for csv_name in inner_zf.namelist():
                     if not csv_name.endswith(".csv"):
                         continue
-                    # Extract symbol from the CSV filename: "btcusdt_hour_trade.csv" → "BTCUSDT"
+                    # Extract symbol from the CSV filename: "spy_daily_trade.csv" → "SPY"
                     tokens = csv_name.replace(".csv", "").split("_")
                     symbol_from_path = tokens[0].upper() if tokens else "UNKNOWN"
 
@@ -140,13 +165,15 @@ class MarketDataClient:
         symbols: str | Iterable[str],
         start: date | str,
         end: date | str,
-        output: str | Path,
+        output: str | Path | None = None,
         resolution: str = "daily",
         provider: str = "auto",
-        format: str = "parquet",
+        format: str = "lean",
     ) -> Path:
         if isinstance(symbols, str):
             symbols = [symbols]
+        if output is None:
+            output = _default_output_path(list(symbols), resolution)
         body = {
             "symbols": list(symbols),
             "start": str(start),
