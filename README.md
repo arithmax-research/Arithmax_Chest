@@ -12,7 +12,7 @@
   <p align="center">
     <a href="https://pypi.org/project/arithmaxchest/"><img src="https://img.shields.io/pypi/v/arithmaxchest?color=4B8BBE&label=PyPI" alt="PyPI"></a>
     <a href="https://pypi.org/project/arithmaxchest/"><img src="https://img.shields.io/pypi/pyversions/arithmaxchest?color=4B8BBE" alt="Python Versions"></a>
-    <a href="https://achest.misango.me/health"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fachest.misango.me%2Fhealth&label=API&color=22C55E" alt="API Status"></a>
+    <a href="https://achestv2.misango.me/health"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fachestv2.misango.me%2Fhealth&label=API&color=22C55E" alt="API Status"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
   </p>
 </p>
@@ -42,7 +42,7 @@ pip install arithmaxchest[server]     # self-host the API
 ```python
 from achest import MarketDataClient
 
-# Hosted API (defaults to https://achest.misango.me)
+# Hosted API (defaults to https://achestv2.misango.me)
 client = MarketDataClient()
 
 # Or with your own server + token
@@ -248,4 +248,4 @@ MIT
 
 ---
 
-*Built by [Arithmax Research](https://achest.misango.me). Market data for the next generation of analysts and algorithms.*
+*Built by [Arithmax Research](https://achestv2.misango.me). Market data for the next generation of analysts and algorithms.*

@@ -8,7 +8,7 @@ This file is for maintainers and deployment work. Public user-facing guidance be
 
 The public service is expected to live behind a domain such as:
 
-- https://achest.misango.me
+- https://achestv2.misango.me
 
 The app can also be served from an EC2 instance or container behind a reverse proxy, and the public hostname should be used by end users instead of loopback addresses.
 

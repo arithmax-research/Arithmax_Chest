@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_HOST="${APP_HOST:-https://achest.misango.me}"
+APP_HOST="${APP_HOST:-https://achestv2.misango.me}"
 APP_DIR="${APP_DIR:-/home/ubuntu/codechest/Arithmax_Chest}"
 BRANCH="${BRANCH:-main}"
 REPO_URL="${REPO_URL:-https://github.com/arithmax-research/Arithmax_Chest.git}"

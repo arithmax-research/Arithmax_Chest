@@ -35,7 +35,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://achest.misango.me"
+Homepage = "https://achestv2.misango.me"
 Repository = "https://github.com/arithmax-research/Arithmax_Chest"
 Documentation = "https://github.com/arithmax-research/Arithmax_Chest/blob/main/documentation.md"
 Changelog = "https://github.com/arithmax-research/Arithmax_Chest/releases"

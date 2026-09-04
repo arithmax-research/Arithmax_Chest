@@ -12,7 +12,7 @@ import pandas as pd
 
 from .service import to_q_table
 
-_DEFAULT_BASE_URL = "https://achest.misango.me"
+_DEFAULT_BASE_URL = "https://achestv2.misango.me"
 
 #: Transport-level exceptions that are safe to retry (transient network/SSL failures).
 _RETRYABLE_EXCEPTIONS = (
