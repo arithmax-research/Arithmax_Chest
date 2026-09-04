@@ -27,7 +27,7 @@ PROVIDER_CAPABILITIES = {
     },
     "binance": {
         "assets": {"crypto"},
-        "resolutions": {"tick", "second", "minute", "hour", "daily", "weekly", "monthly"},
+        "resolutions": {"tick", "minute", "hour", "daily", "weekly", "monthly"},
     },
     "massive": {
         "assets": {"equity", "etf", "index", "crypto", "forex", "futures", "options"},
