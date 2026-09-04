@@ -53,6 +53,9 @@ def _read_lean_zip(zip_bytes: bytes) -> pd.DataFrame:
     The server returns an outer zip containing individual per-symbol zips
     (e.g. ``spy.zip``).  Each inner zip holds a single merged CSV
     with columns ``Time,Open,High,Low,Close,Volume``.
+
+    Returns a DataFrame with the same lowercase column schema as the
+    JSON / CSV formats: ``timestamp, symbol, open, high, low, close, volume``.
     """
     frames = []
     with zipfile.ZipFile(BytesIO(zip_bytes)) as outer_zf:
@@ -78,10 +81,12 @@ def _read_lean_zip(zip_bytes: bytes) -> pd.DataFrame:
                         parsed = pd.to_datetime(parsed, unit="ms", origin="unix", errors="coerce")
                     df["timestamp"] = parsed
                     df = df.drop(columns=["Time"])
+                    # Normalise column names to lowercase (Open → open, Volume → volume)
+                    df.columns = [col.lower() for col in df.columns]
                     frames.append(df)
     if frames:
         return pd.concat(frames, ignore_index=True)
-    return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume", "symbol", "timestamp"])
+    return pd.DataFrame(columns=["timestamp", "symbol", "open", "high", "low", "close", "volume"])
 
 
 class MarketDataClient:
