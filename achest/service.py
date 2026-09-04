@@ -90,8 +90,8 @@ _PROVIDER_KEY_MAP = {
     "alpha_vantage": "ALPHA_VANTAGE_API_KEY",
     "fred": "FRED_API_KEY",
     "quandl": "QUANDL_API_KEY",
-    "binance": "",       # public API, no key required
-    "yahoo": "",         # public API, no key required
+    "binance": "BINANCE_API_KEY",   # requires API key
+    "yahoo": "",                     # public API, no key required
 }
 
 
