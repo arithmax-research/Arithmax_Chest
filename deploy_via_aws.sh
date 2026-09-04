@@ -72,6 +72,9 @@ if [[ -f "\${APP_DIR}/docker-compose.ec2.yml" ]]; then
   cd "\${APP_DIR}"
 
   echo "Tearing down old containers and freeing bound network ports..."
+  # Stop nginx if running (it occupies port 80/443 on fresh EC2 instances)
+  sudo systemctl stop nginx 2>/dev/null || true
+  sudo kill -9 \$(lsof -t -i :80 -i :443 2>/dev/null) 2>/dev/null || true
   sudo docker compose --env-file .env -f docker-compose.ec2.yml down --remove-orphans || true
   
   # Release any stuck containers occupying port 80/443
