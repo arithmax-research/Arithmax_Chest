@@ -15,9 +15,7 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   exit 1
 fi
 
-if [[ -n "${SSH_KEY:-}" ]]; then
-  :
-else
+if [[ -z "${SSH_KEY:-}" ]]; then
   for candidate in "$HOME"/.ssh/*.pem "$HOME"/.ssh/*.key; do
     if [[ -f "$candidate" ]]; then
       SSH_KEY="$candidate"
@@ -26,22 +24,15 @@ else
   done
 fi
 
-if [[ -z "${SSH_KEY:-}" ]]; then
-  echo "No SSH private key found in ~/.ssh."
-  echo "Set SSH_KEY to your EC2 private key path and rerun."
+if [[ -z "${SSH_KEY:-}" ]] || [[ ! -f "${SSH_KEY}" ]]; then
+  echo "Valid SSH key not found in ~/.ssh or specified via SSH_KEY."
   exit 1
 fi
 
-if [[ ! -f "${SSH_KEY}" ]]; then
-  echo "SSH key not found: ${SSH_KEY}"
-  echo "Set SSH_KEY to your EC2 private key path and rerun."
-  exit 1
-fi
-
-echo "Copying .env to EC2 host ${EC2_HOST}"
+echo "Copying .env to EC2 host ${EC2_HOST}..."
 scp -i "${SSH_KEY}" -o StrictHostKeyChecking=accept-new "${ENV_FILE}" "${SSH_USER}@${EC2_HOST}:/tmp/arithmaxchest.env"
 
-echo "Deploying Arithmax Chest on ${EC2_HOST}"
+echo "Deploying Arithmax Chest on ${EC2_HOST}..."
 ssh -i "${SSH_KEY}" -o StrictHostKeyChecking=accept-new "${SSH_USER}@${EC2_HOST}" <<EOF
 set -euo pipefail
 export APP_HOST='${APP_HOST}'
@@ -72,23 +63,31 @@ else
   cd "\${APP_DIR}"
 fi
 
-# --- Install the .env file (handle root-owned file) ---
-sudo chown "\$(id -un)":"\$(id -gn)" "\${APP_DIR}/.env" 2>/dev/null || true
+# --- Install the .env file ---
 cp /tmp/arithmaxchest.env "\${APP_DIR}/.env"
 chmod 600 "\${APP_DIR}/.env"
 
 # --- Build and restart Docker containers ---
 if [[ -f "\${APP_DIR}/docker-compose.ec2.yml" ]]; then
   cd "\${APP_DIR}"
+
+  echo "Tearing down old containers..."
   sudo docker compose --env-file .env -f docker-compose.ec2.yml down --remove-orphans 2>/dev/null || true
-  # Force-remove any stale containers that might have been left behind (name conflict guard)
+  
+  # Remove containers directly in case compose failed
   sudo docker rm -f achest-api achest-caddy 2>/dev/null || true
-  # Prune BuildKit cache to avoid overlay2 corruption on fresh instances
-  sudo docker builder prune --all --force 2>/dev/null || true
+
+  # Safely clear dangling build cache without breaking storage drivers
+  echo "Pruning build cache..."
+  sudo docker builder prune -f 2>/dev/null || true
+
   # Reset Docker overlay2 snapshot store to squash persistent layer corruption
+  echo "Resetting Docker overlay2 store..."
   sudo systemctl stop docker 2>/dev/null || true
   sudo rm -rf /var/lib/docker/overlay2/
   sudo systemctl start docker 2>/dev/null || true
+
+  echo "Building and starting fresh containers..."
   sudo docker compose --env-file .env -f docker-compose.ec2.yml build api
   sudo docker compose --env-file .env -f docker-compose.ec2.yml up -d --force-recreate --remove-orphans
 else
@@ -97,8 +96,18 @@ else
 fi
 
 # --- Health check ---
-curl -fsSL "\${APP_HOST}/health"
+echo "Performing health check on \${APP_HOST}/health..."
+echo "Waiting for Caddy to provision TLS certificate..."
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  if curl -fsSL "\${APP_HOST}/health" >/dev/null 2>&1; then
+    echo "Health check passed on \${APP_HOST}/health"
+    break
+  fi
+  echo "Attempt $i/10 - not ready yet, sleeping 3s..."
+  sleep 3
+done
+curl -fsSL "\${APP_HOST}/health" || true
 EOF
 
 echo ""
-echo "Deployment finished. Confirm health: ${APP_HOST}/health"
+echo "Deployment finished successfully. Confirm health: ${APP_HOST}/health"
