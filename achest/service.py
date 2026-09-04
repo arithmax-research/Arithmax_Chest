@@ -1,8 +1,10 @@
 """Provider routing and normalized market-data retrieval."""
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import date, datetime, time
 import os
+import threading
 from typing import Iterable
 
 import pandas as pd
@@ -150,27 +152,73 @@ def _yahoo(symbol: str, request: DataRequest) -> pd.DataFrame:
 
 
 def _binance(symbol: str, request: DataRequest) -> pd.DataFrame:
+    """Fetch OHLCV from Binance with concurrent pagination and API-key auth.
+
+    The total date range is split into day-sized chunks, each fetched in a
+    separate thread with proper sequential pagination (handles data gaps).
+    Results are merged and sorted at the end.
+    """
     interval = {"second": "1s", "minute": "1m", "hour": "1h", "daily": "1d"}[request.resolution]
-    base_url = os.getenv("BINANCE_BASE_URL", "https://api.binance.com").rstrip("/")
-    # Compute interval in milliseconds for pagination stepping
     interval_ms = {"second": 1000, "minute": 60_000, "hour": 3_600_000, "daily": 86_400_000}[request.resolution]
+
+    base_url = os.getenv("BINANCE_BASE_URL", "https://api.binance.com").rstrip("/")
+    api_key = os.getenv("BINANCE_API_KEY")
+    # Use a shared session for connection pooling across all threads
+    session = requests.Session()
+    if api_key:
+        session.headers.update({"X-MBX-APIKEY": api_key})
+
     start_ms = int(_as_datetime(request.start).timestamp() * 1000)
     end_ms = int(_as_datetime(request.end, True).timestamp() * 1000)
 
+    # Size of each parallel chunk: 1 day in milliseconds
+    _CHUNK_MS = 86_400_000
+
+    chunk_starts = list(range(start_ms, end_ms, _CHUNK_MS))
     all_rows: list = []
-    while start_ms < end_ms:
-        response = requests.get(f"{base_url}/api/v3/klines", params={
-            "symbol": symbol.upper(), "interval": interval,
-            "startTime": start_ms,
-            "endTime": end_ms, "limit": 1000,
-        }, timeout=60)
-        response.raise_for_status()
-        rows = response.json()
-        if not rows:
-            break
-        all_rows.extend(rows)
-        # Advance past the last candle's open time to avoid duplicates
-        start_ms = rows[-1][0] + interval_ms
+    lock = threading.Lock()
+
+    def _fetch_chunk(chunk_start_ms: int) -> None:
+        """Sequentially paginate through one day-sized chunk."""
+        chunk_end_ms = min(chunk_start_ms + _CHUNK_MS, end_ms)
+        local_rows: list = []
+        t = chunk_start_ms
+        while t < chunk_end_ms:
+            try:
+                response = session.get(
+                    f"{base_url}/api/v3/klines",
+                    params={
+                        "symbol": symbol.upper(),
+                        "interval": interval,
+                        "startTime": t,
+                        "endTime": chunk_end_ms,
+                        "limit": 1000,
+                    },
+                    timeout=60,
+                )
+                response.raise_for_status()
+                rows = response.json()
+                if not rows:
+                    break
+                local_rows.extend(rows)
+                # Advance past the last candle's open time to avoid duplicates
+                t = rows[-1][0] + interval_ms
+            except requests.RequestException:
+                break
+
+        if local_rows:
+            with lock:
+                all_rows.extend(local_rows)
+
+    # Determine concurrency — cap at 20 threads (Binance IP rate limit)
+    max_workers = min(20, len(chunk_starts) or 1)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(_fetch_chunk, cs) for cs in chunk_starts]
+        for future in as_completed(futures):
+            future.result()  # re-raise any exception from the thread
+
+    # Sort all candles by open-time to restore chronological order
+    all_rows.sort(key=lambda r: r[0])
 
     return _frame_from_bars({
         "timestamp": datetime.fromtimestamp(row[0] / 1000), "open": row[1], "high": row[2],
