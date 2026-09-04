@@ -165,10 +165,10 @@ class MarketDataClient:
         symbols: str | Iterable[str],
         start: date | str,
         end: date | str,
-        output: str | Path | None = None,
         resolution: str = "daily",
         provider: str = "auto",
         format: str = "lean",
+        output: str | Path | None = None,
     ) -> Path:
         if isinstance(symbols, str):
             symbols = [symbols]
