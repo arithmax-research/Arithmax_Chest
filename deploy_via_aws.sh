@@ -71,21 +71,15 @@ chmod 600 "\${APP_DIR}/.env"
 if [[ -f "\${APP_DIR}/docker-compose.ec2.yml" ]]; then
   cd "\${APP_DIR}"
 
-  echo "Tearing down old containers..."
-  sudo docker compose --env-file .env -f docker-compose.ec2.yml down --remove-orphans 2>/dev/null || true
+  echo "Tearing down old containers and freeing bound network ports..."
+  sudo docker compose --env-file .env -f docker-compose.ec2.yml down --remove-orphans || true
   
-  # Remove containers directly in case compose failed
+  # Release any stuck containers occupying port 80/443
   sudo docker rm -f achest-api achest-caddy 2>/dev/null || true
 
-  # Safely clear dangling build cache without breaking storage drivers
+  # Prune unused cache safely without corrupting overlay2 storage driver
   echo "Pruning build cache..."
   sudo docker builder prune -f 2>/dev/null || true
-
-  # Reset Docker overlay2 snapshot store to squash persistent layer corruption
-  echo "Resetting Docker overlay2 store..."
-  sudo systemctl stop docker 2>/dev/null || true
-  sudo rm -rf /var/lib/docker/overlay2/
-  sudo systemctl start docker 2>/dev/null || true
 
   echo "Building and starting fresh containers..."
   sudo docker compose --env-file .env -f docker-compose.ec2.yml build api
@@ -98,12 +92,12 @@ fi
 # --- Health check ---
 echo "Performing health check on \${APP_HOST}/health..."
 echo "Waiting for Caddy to provision TLS certificate..."
-for i in 1 2 3 4 5 6 7 8 9 10; do
+for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
   if curl -fsSL "\${APP_HOST}/health" >/dev/null 2>&1; then
     echo "Health check passed on \${APP_HOST}/health"
     break
   fi
-  echo "Attempt \$i/10 - not ready yet, sleeping 3s..."
+  echo "Attempt \${i}/15 - waiting for TLS/API... sleeping 3s..."
   sleep 3
 done
 curl -fsSL "\${APP_HOST}/health" || true
