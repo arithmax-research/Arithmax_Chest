@@ -150,18 +150,32 @@ def _yahoo(symbol: str, request: DataRequest) -> pd.DataFrame:
 
 
 def _binance(symbol: str, request: DataRequest) -> pd.DataFrame:
-    interval = {"minute": "1m", "hour": "1h", "daily": "1d"}[request.resolution]
+    interval = {"second": "1s", "minute": "1m", "hour": "1h", "daily": "1d"}[request.resolution]
     base_url = os.getenv("BINANCE_BASE_URL", "https://api.binance.com").rstrip("/")
-    response = requests.get(f"{base_url}/api/v3/klines", params={
-        "symbol": symbol.upper(), "interval": interval,
-        "startTime": int(_as_datetime(request.start).timestamp() * 1000),
-        "endTime": int(_as_datetime(request.end, True).timestamp() * 1000), "limit": 1000,
-    }, timeout=60)
-    response.raise_for_status()
+    # Compute interval in milliseconds for pagination stepping
+    interval_ms = {"second": 1000, "minute": 60_000, "hour": 3_600_000, "daily": 86_400_000}[request.resolution]
+    start_ms = int(_as_datetime(request.start).timestamp() * 1000)
+    end_ms = int(_as_datetime(request.end, True).timestamp() * 1000)
+
+    all_rows: list = []
+    while start_ms < end_ms:
+        response = requests.get(f"{base_url}/api/v3/klines", params={
+            "symbol": symbol.upper(), "interval": interval,
+            "startTime": start_ms,
+            "endTime": end_ms, "limit": 1000,
+        }, timeout=60)
+        response.raise_for_status()
+        rows = response.json()
+        if not rows:
+            break
+        all_rows.extend(rows)
+        # Advance past the last candle's open time to avoid duplicates
+        start_ms = rows[-1][0] + interval_ms
+
     return _frame_from_bars({
         "timestamp": datetime.fromtimestamp(row[0] / 1000), "open": row[1], "high": row[2],
         "low": row[3], "close": row[4], "volume": row[5],
-    } for row in response.json())
+    } for row in all_rows)
 
 
 def _massive(symbol: str, request: DataRequest) -> pd.DataFrame:

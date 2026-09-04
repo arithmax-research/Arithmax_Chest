@@ -109,13 +109,15 @@ class MarketDataClient:
 
     def get(
         self,
-        symbols: Iterable[str],
+        symbols: str | Iterable[str],
         start: date | str,
         end: date | str,
         resolution: str = "daily",
         provider: str = "auto",
         format: str = "json",
     ) -> pd.DataFrame:
+        if isinstance(symbols, str):
+            symbols = [symbols]
         body = {
             "symbols": list(symbols),
             "start": str(start),
@@ -135,7 +137,7 @@ class MarketDataClient:
 
     def download(
         self,
-        symbols: Iterable[str],
+        symbols: str | Iterable[str],
         start: date | str,
         end: date | str,
         output: str | Path,
@@ -143,6 +145,8 @@ class MarketDataClient:
         provider: str = "auto",
         format: str = "parquet",
     ) -> Path:
+        if isinstance(symbols, str):
+            symbols = [symbols]
         body = {
             "symbols": list(symbols),
             "start": str(start),
