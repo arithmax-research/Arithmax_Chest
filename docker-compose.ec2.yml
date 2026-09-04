@@ -38,6 +38,7 @@ services:
       - "127.0.0.1:4443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/etc/caddy/certs:ro
       - achest_caddy_data:/data
       - achest_caddy_config:/config
 
