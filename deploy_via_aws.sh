@@ -7,7 +7,7 @@ BRANCH="${BRANCH:-main}"
 REPO_URL="${REPO_URL:-https://github.com/arithmax-research/Arithmax_Chest.git}"
 ENV_FILE="${ENV_FILE:-.env}"
 SSH_USER="${SSH_USER:-ubuntu}"
-EC2_HOST="${EC2_HOST:-98.93.200.66}"
+EC2_HOST="${EC2_HOST:-18.142.144.144}"
 
 if [[ ! -f "${ENV_FILE}" ]]; then
   echo "Missing local env file: ${ENV_FILE}"
@@ -83,6 +83,12 @@ if [[ -f "\${APP_DIR}/docker-compose.ec2.yml" ]]; then
   sudo docker compose --env-file .env -f docker-compose.ec2.yml down --remove-orphans 2>/dev/null || true
   # Force-remove any stale containers that might have been left behind (name conflict guard)
   sudo docker rm -f achest-api achest-caddy 2>/dev/null || true
+  # Prune BuildKit cache to avoid overlay2 corruption on fresh instances
+  sudo docker builder prune --all --force 2>/dev/null || true
+  # Reset Docker overlay2 snapshot store to squash persistent layer corruption
+  sudo systemctl stop docker 2>/dev/null || true
+  sudo rm -rf /var/lib/docker/overlay2/
+  sudo systemctl start docker 2>/dev/null || true
   sudo docker compose --env-file .env -f docker-compose.ec2.yml build api
   sudo docker compose --env-file .env -f docker-compose.ec2.yml up -d --force-recreate --remove-orphans
 else
