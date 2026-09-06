@@ -259,7 +259,11 @@ class MarketDataClient:
             symbols = [symbols]
         symbols = list(symbols)
         if output is None:
-            output = _default_output_path(symbols, resolution)
+            if format == "lean":
+                output = _default_output_path(symbols, resolution)
+            else:
+                ext = {"parquet": ".parquet", "csv": ".csv", "json": ".json"}.get(format, "")
+                output = Path("Custom_Downloads") / f"{symbols[0].lower()}_{resolution}{ext}"
         destination = Path(output)
 
         start_date = start if isinstance(start, date) else date.fromisoformat(str(start))
