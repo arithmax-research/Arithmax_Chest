@@ -171,25 +171,79 @@ with MarketDataClient() as client:
     print(data.groupby("symbol").tail(3))
 ```
 
-### 4. Download to file
+### 4. Downloading data — two ways
+
+You can either save results from `get()` by passing `format` + `output`, or use the dedicated `download()` method. Their signatures are identical except:
+
+| | `get()` | `download()` |
+|--|---------|-------------|
+| **Default format** | `json` (returns DataFrame) | `lean` (writes Lean-format zip archives) |
+| **Returns** | `pd.DataFrame` | `Path` to the saved file/directory |
+| **Use case** | Interactive exploration + save | Batch / pipeline saving to disk |
+
+There is also a special **`lean` format** — it writes per-symbol zip archives compatible with [QuantConnect Lean](https://github.com/QuantConnect/Lean) for algorithmic backtesting.
+
+---
+
+#### 4a. Save from `get()` — quick file output
 
 ```python
-# CSV
+# CSV — human-readable
 client.get(["AAPL"], "2025-01-01", "2025-01-31", format="csv", output="aapl.csv")
 
-# Parquet (fast, compressed)
+# Parquet — fast, compressed, great for large datasets
 client.get(["AAPL"], "2025-01-01", "2025-01-31", format="parquet", output="aapl.parquet")
 
 # JSON
 client.get(["AAPL"], "2025-01-01", "2025-01-31", format="json", output="aapl.json")
 ```
 
-### 5. The `download()` method
+#### 4b. The `download()` method — dedicated saving
 
 ```python
-client.download(["SPY", "QQQ"], "2025-01-01", "2025-01-31",
-                output="market-data.parquet")
+client.download(
+    symbols,          # one or more tickers
+    start,            # start date
+    end,              # end date
+    resolution,       # bar size (default: "daily")
+    provider,         # force a provider or "auto" (default)
+    format,           # output format (default: "lean")
+    output,           # file path or directory (see auto-path rules below)
+)
 ```
+
+| Parameter | Description |
+|-----------|-------------|
+| `format` | One of `"csv"`, `"parquet"`, `"json"`, or `"lean"` (default) |
+| `output` | File path (for csv/parquet/json) or directory path (for lean). When `None`, an asset-class-aware path is chosen automatically (see below). |
+
+##### Examples
+
+```python
+# Parquet file for analysis
+client.download(["SPY", "QQQ"], "2025-01-01", "2025-01-31",
+                format="parquet", output="spy-qqq.parquet")
+
+# CSV for spreadsheets
+client.download(["AAPL", "MSFT"], "2025-01-01", "2025-01-31",
+                format="csv", output="tech.csv")
+
+# Lean format — one zip per symbol, ready for QuantConnect backtesting
+client.download(["SPY", "QQQ"], "2025-01-01", "2025-01-31",
+                format="lean", output="data/equity/daily")
+```
+
+##### Auto-output path
+
+When you omit `output`, `download()` picks a directory based on the first symbol's asset class and the resolution:
+
+| Asset Type | Default Path |
+|-----------|-------------|
+| Equities / ETFs / Indices | `Data/equity/usa/{resolution}/` |
+| Crypto | `Data/crypto/{resolution}/` |
+| Futures | `Data/futures/{resolution}/` |
+| Forex | `Data/forex/{resolution}/` |
+| Everything else | `Data/other/{resolution}/` |
 
 ## Data Shape
 
