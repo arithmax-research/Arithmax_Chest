@@ -1,6 +1,7 @@
 """Python client for the centralized market-data API."""
 
-from datetime import date
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import date, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Iterable
@@ -20,6 +21,44 @@ _RETRYABLE_EXCEPTIONS = (
     httpx.TimeoutException,
     httpx.RemoteProtocolError,
 )
+
+# Chunk thresholds per resolution (days).  0 = no auto-chunking (single request).
+# High-res data over long ranges is split into smaller parallel requests.
+_CHUNK_DAYS: dict[str, int] = {
+    "tick": 1,
+    "second": 1,
+    "minute": 7,
+    "hour": 30,
+}
+
+
+def _chunk_date_range(
+    start: date,
+    end: date,
+    resolution: str,
+    chunk_days: int | None = None,
+) -> list[tuple[date, date]]:
+    """Split (start, end) into non-overlapping sub-ranges for parallel fetching.
+
+    The API treats *end* as exclusive (the day *after* the last trading day),
+    so consecutive chunks tile perfectly: chunk₂.start == chunk₁.end.
+
+    Returns ``[(start, end)]`` (no split) for low-res data or when the range
+    is already smaller than one chunk.
+    """
+    size = _CHUNK_DAYS.get(resolution, 0) if chunk_days is None else chunk_days
+    if size <= 0:
+        return [(start, end)]
+
+    chunks: list[tuple[date, date]] = []
+    cursor = start
+    while cursor < end:
+        chunk_end = cursor + timedelta(days=size)
+        if chunk_end > end:
+            chunk_end = end
+        chunks.append((cursor, chunk_end))
+        cursor = chunk_end  # end is exclusive, so this tiles cleanly
+    return chunks
 
 
 def _default_output_path(symbols: list[str], resolution: str) -> Path:
@@ -97,12 +136,17 @@ class MarketDataClient:
         timeout: float = 300.0,
         max_retries: int = 3,
         retry_delay: float = 1.0,
+        max_workers: int = 4,
+        chunk_days: int | None = None,
     ):
         final_base_url = (base_url or _DEFAULT_BASE_URL).rstrip("/")
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         self.client = httpx.Client(base_url=final_base_url, headers=headers, timeout=timeout)
         self._max_retries = max_retries
         self._retry_delay = retry_delay
+        self._max_workers = max_workers
+        # None = use per-resolution defaults from _CHUNK_DAYS
+        self._chunk_days = chunk_days
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -148,8 +192,45 @@ class MarketDataClient:
     ) -> pd.DataFrame:
         if isinstance(symbols, str):
             symbols = [symbols]
+        symbols = list(symbols)
+
+        start_date = start if isinstance(start, date) else date.fromisoformat(str(start))
+        end_date = end if isinstance(end, date) else date.fromisoformat(str(end))
+
+        chunks = _chunk_date_range(start_date, end_date, resolution, self._chunk_days)
+
+        if len(chunks) <= 1:
+            return self._fetch_chunk(symbols, start, end, resolution, provider, format)
+
+        # Parallel fetch across chunks
+        frames: list[pd.DataFrame] = []
+        with ThreadPoolExecutor(max_workers=self._max_workers) as pool:
+            futures = {
+                pool.submit(
+                    self._fetch_chunk, symbols, cs, ce, resolution, provider, format
+                ): (cs, ce)
+                for cs, ce in chunks
+            }
+            for future in as_completed(futures):
+                frames.append(future.result())
+
+        result = pd.concat(frames, ignore_index=True)
+        if "timestamp" in result.columns:
+            result = result.sort_values("timestamp").reset_index(drop=True)
+        return result
+
+    def _fetch_chunk(
+        self,
+        symbols: list[str],
+        start: date | str,
+        end: date | str,
+        resolution: str,
+        provider: str,
+        format: str,
+    ) -> pd.DataFrame:
+        """Execute a single date-range request and return a DataFrame."""
         body = {
-            "symbols": list(symbols),
+            "symbols": symbols,
             "start": str(start),
             "end": str(end),
             "resolution": resolution,
@@ -160,7 +241,6 @@ class MarketDataClient:
         response.raise_for_status()
 
         if format == "lean":
-            # Server returns a zip-of-zips. Extract inner zips and read CSVs.
             return _read_lean_zip(response.content)
 
         return pd.DataFrame(response.json())
@@ -177,10 +257,74 @@ class MarketDataClient:
     ) -> Path:
         if isinstance(symbols, str):
             symbols = [symbols]
+        symbols = list(symbols)
         if output is None:
-            output = _default_output_path(list(symbols), resolution)
+            output = _default_output_path(symbols, resolution)
+        destination = Path(output)
+
+        start_date = start if isinstance(start, date) else date.fromisoformat(str(start))
+        end_date = end if isinstance(end, date) else date.fromisoformat(str(end))
+
+        chunks = _chunk_date_range(start_date, end_date, resolution, self._chunk_days)
+
+        if len(chunks) <= 1:
+            return self._download_single(
+                symbols, start, end, resolution, provider, format, destination,
+            )
+
+        # Parallel chunks
+        if format == "lean":
+            destination.mkdir(parents=True, exist_ok=True)
+            with ThreadPoolExecutor(max_workers=self._max_workers) as pool:
+                futures = {
+                    pool.submit(
+                        self._download_single,
+                        symbols, cs, ce, resolution, provider, format, destination,
+                    ): (cs, ce)
+                    for cs, ce in chunks
+                }
+                for future in as_completed(futures):
+                    future.result()  # re-raises if the chunk failed
+            return destination
+
+        # Non-lean: fetch chunks as DataFrames in parallel, concat, write final file
+        frames: list[pd.DataFrame] = []
+        with ThreadPoolExecutor(max_workers=self._max_workers) as pool:
+            futures = {
+                pool.submit(
+                    self._fetch_chunk, symbols, cs, ce, resolution, provider, format,
+                ): (cs, ce)
+                for cs, ce in chunks
+            }
+            for future in as_completed(futures):
+                frames.append(future.result())
+
+        result = pd.concat(frames, ignore_index=True)
+        if "timestamp" in result.columns:
+            result = result.sort_values("timestamp").reset_index(drop=True)
+
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if format == "csv":
+            result.to_csv(destination, index=False)
+        elif format == "json":
+            destination.write_text(result.to_json(orient="records", date_format="iso"))
+        else:  # parquet
+            result.to_parquet(destination, index=False)
+        return destination
+
+    def _download_single(
+        self,
+        symbols: list[str],
+        start: date | str,
+        end: date | str,
+        resolution: str,
+        provider: str,
+        format: str,
+        destination: Path,
+    ) -> Path:
+        """Execute a single date-range download and write to *destination*."""
         body = {
-            "symbols": list(symbols),
+            "symbols": symbols,
             "start": str(start),
             "end": str(end),
             "resolution": resolution,
@@ -191,18 +335,14 @@ class MarketDataClient:
         response.raise_for_status()
 
         if format == "lean":
-            data_dir = Path(output)
-            data_dir.mkdir(parents=True, exist_ok=True)
-            # Server returns a zip-of-zips: extract each inner zip and save it.
+            destination.mkdir(parents=True, exist_ok=True)
             with zipfile.ZipFile(BytesIO(response.content)) as outer_zf:
                 for zip_name in outer_zf.namelist():
                     if not zip_name.endswith(".zip"):
                         continue
-                    inner_bytes = outer_zf.read(zip_name)
-                    (data_dir / zip_name).write_bytes(inner_bytes)
-            return data_dir
+                    (destination / zip_name).write_bytes(outer_zf.read(zip_name))
+            return destination
 
-        destination = Path(output)
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(response.content)
         return destination
