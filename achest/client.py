@@ -140,18 +140,18 @@ class MarketDataClient:
         retry_delay: float = 1.0,
         max_workers: int = 4,
         chunk_days: int | None = None,
-        eulerpool_direct: bool = False,
+        eulerpool_direct: bool | None = None,
     ):
         """Market-data client.
 
         Parameters
         ----------
-        eulerpool_direct : bool, optional
-            If True, Eulerpool extended-data methods (fundamentals, sentiment,
-            macro, crypto, options, etc.) talk **directly** to the Eulerpool
-            API instead of proxying through the chest server.  Use this when
-            the server hasn't been upgraded to the Eulerpool endpoints yet.
-            Default False (go through the server).
+        eulerpool_direct : bool or None, optional
+            * ``True``  — Eulerpool methods talk **directly** to api.eulerpool.com
+                         (no server needed; works in local scripts).
+            * ``False`` — Go through the chest server at ``/v1/eulerpool/...``.
+            * ``None`` (default) — Auto-detect: try the server first; if it
+                         responds, use it; otherwise fall back to direct.
         """
         final_base_url = (base_url or _DEFAULT_BASE_URL).rstrip("/")
         headers = {"Authorization": f"Bearer {token}"} if token else {}
@@ -162,6 +162,7 @@ class MarketDataClient:
         # None = use per-resolution defaults from _CHUNK_DAYS
         self._chunk_days = chunk_days
         self._eulerpool_direct = eulerpool_direct
+        self._state: dict[str, bool] = {}  # caches resolved direct/server mode
 
     def _euler(self) -> Any:
         """Lazy-import and return an EulerpoolProvider for direct access."""
@@ -169,41 +170,216 @@ class MarketDataClient:
         return EulerpoolProvider()
 
     def _euler_request(self, path: str, **params) -> Any:
-        """Fetch from Eulerpool via server, or direct if configured."""
-        if self._eulerpool_direct:
-            ep = self._euler()
-            # parse path like "fundamentals/overview/AAPL" → method call
-            parts = path.split("/")
-            if parts[0] == "fundamentals" and len(parts) >= 3:
-                method_name = f"company_{parts[1]}" if parts[1] in ("profile", "overview") else parts[1]
-                # Handle different method signatures
-                return getattr(ep, f"{method_name}")(parts[-1])
-            if parts[0] == "sentiment" and len(parts) >= 3:
-                return getattr(ep, f"{parts[1]}_sentiment")(parts[-1])
-            if parts[0] == "analyst" and len(parts) >= 3:
-                return getattr(ep, f"analyst_{parts[1]}")(parts[-1])
-            if parts[0] == "ownership" and len(parts) >= 3:
-                return getattr(ep, f"{parts[1]}_ownership")(parts[-1])
-            if parts[0] == "macro" and len(parts) >= 2:
-                return getattr(ep, parts[1])(**params)
-            if parts[0] == "crypto" and len(parts) >= 2:
-                return getattr(ep, f"crypto_{parts[1]}")(**params)
-            if parts[0] == "options" and len(parts) >= 2:
-                return getattr(ep, f"{parts[1]}")(**params)
-            if parts[0] == "alternative" and len(parts) >= 2:
-                return getattr(ep, f"{parts[1]}")(**params)
-            if parts[0] == "news" and len(parts) >= 2:
-                return getattr(ep, f"company_news")(parts[-1])
-            if parts[0] == "market" and len(parts) >= 2:
-                return getattr(ep, f"{parts[1]}")(**params)
-            raise ValueError(f"Unsupported direct path: {path}")
-        resp = self._request("get", f"/v1/eulerpool/{path}", params=params)
-        resp.raise_for_status()
-        return resp.json()
+        """Fetch from Eulerpool via server, or direct if configured/server-unavailable."""
+        if self._eulerpool_direct is True:
+            return self._euler_direct(path, **params)
+        # Try server
+        try:
+            resp = self._request("get", f"/v1/eulerpool/{path}", params=params)
+            resp.raise_for_status()
+            if self._eulerpool_direct is None:
+                self._state.setdefault("euler_server_ok", True)
+            return resp.json()
+        except Exception as exc:
+            if self._eulerpool_direct is False:
+                raise  # user explicitly asked for server
+            if self._state.get("euler_server_ok"):
+                raise  # was working before — real error
+            return self._euler_direct(path, **params)
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
+    # ── Internal helpers ────────────────────────────────────────────────
+    def _euler_direct(self, path: str, **params) -> Any:
+        """Execute an Eulerpool data request directly against api.eulerpool.com."""
+        from .eulerpool_provider import EulerpoolProvider
+
+        ep = EulerpoolProvider()
+        parts = path.split("/")
+
+        # fundamentals
+        if parts[0] == "fundamentals" and len(parts) >= 3:
+            dt, identifier = parts[1], parts[2]
+            m = {
+                "profile": lambda: ep.company_profile(identifier),
+                "overview": lambda: ep.company_overview(identifier),
+                "income": lambda: ep.income_statement(identifier),
+                "balance": lambda: ep.balance_sheet(identifier),
+                "cashflow": lambda: ep.cash_flow_statement(identifier),
+                "metrics": lambda: ep.financial_metrics(identifier),
+                "key-figures": lambda: ep.key_figures(identifier),
+                "growth": lambda: ep.growth_metrics(identifier),
+                "margins": lambda: ep.margins(identifier),
+                "esg": lambda: ep.esg_rating(identifier),
+                "aaqs": lambda: ep.aaqs_score(identifier),
+                "fair-value": lambda: ep.fair_value(identifier),
+            }
+            if dt in m:
+                return m[dt]()
+            raise ValueError(f"Unknown fundamentals data_type={dt!r}")
+
+        # sentiment
+        if parts[0] == "sentiment" and len(parts) >= 3:
+            dt, identifier = parts[1], parts[2]
+            m = {
+                "news": lambda: ep.news_sentiment(identifier),
+                "social": lambda: ep.social_sentiment(identifier),
+                "insider": lambda: ep.insider_sentiment(identifier),
+                "swot": lambda: ep.swot_analysis(identifier),
+            }
+            if dt in m:
+                return m[dt]()
+            raise ValueError(f"Unknown sentiment data_type={dt!r}")
+
+        # analyst
+        if parts[0] == "analyst" and len(parts) >= 3:
+            dt, identifier = parts[1], parts[2]
+            m = {
+                "estimates": lambda: ep.analyst_estimates(identifier),
+                "price-target": lambda: ep.price_target_consensus(identifier),
+                "upgrades": lambda: ep.analyst_upgrades(identifier),
+                "recommendations": lambda: ep.analyst_recommendations(identifier),
+            }
+            if dt in m:
+                return m[dt]()
+            raise ValueError(f"Unknown analyst data_type={dt!r}")
+
+        # ownership
+        if parts[0] == "ownership" and len(parts) >= 3:
+            dt, identifier = parts[1], parts[2]
+            m = {
+                "institutional": lambda: ep.institutional_ownership(identifier),
+                "fund": lambda: ep.fund_ownership(identifier),
+                "insider": lambda: ep.insider_trades(identifier),
+                "etf-exposure": lambda: ep.etf_exposure(identifier),
+            }
+            if dt in m:
+                return m[dt]()
+            raise ValueError(f"Unknown ownership data_type={dt!r}")
+
+        # dividends / short
+        if parts[0] == "dividends" and len(parts) >= 3:
+            dt, identifier = parts[1], parts[2]
+            if dt == "history":
+                return ep.dividends(identifier)
+            if dt == "quality":
+                return ep.dividend_quality(identifier)
+            raise ValueError(f"Unknown dividends data_type={dt!r}")
+        if parts[0] == "short" and len(parts) >= 3:
+            dt, identifier = parts[1], parts[2]
+            if dt == "volume":
+                return ep.short_volume(identifier)
+            if dt == "interest":
+                return ep.short_interest(identifier)
+            raise ValueError(f"Unknown short data_type={dt!r}")
+
+        # macro
+        if parts[0] == "macro" and len(parts) >= 2:
+            sub = parts[1]
+            m = {
+                "country-risk": lambda: ep.country_risk(**params),
+                "fred": lambda: ep.fred_observations(parts[2], **params),
+                "fred-latest": lambda: ep.fred_latest(),
+                "credit-spreads": lambda: ep.credit_spreads(**params),
+                "calendar": lambda: ep.macro_calendar(**params),
+            }
+            if sub in m:
+                return m[sub]()
+            raise ValueError(f"Unknown macro sub={sub!r}")
+
+        # index / bonds / forex
+        if parts[0] == "index" and len(parts) >= 2:
+            return ep.index_constituents(parts[1], **params)
+        if parts[0] == "bonds" and parts[1] == "yield-curve":
+            return ep.yield_curve(**params)
+        if parts[0] == "forex" and parts[1] == "rates":
+            return ep.forex_rates(parts[2])
+# crypto
+        if parts[0] == "crypto" and len(parts) >= 2:
+            sub = parts[1]
+            m = {
+                "top": lambda: ep.top_cryptocurrencies(),
+                "market-overview": lambda: ep.crypto_market_overview(),
+                "analysis": lambda: ep.crypto_analysis(parts[2]),
+                "fear-greed": lambda: ep.crypto_fear_greed(**params),
+                "funding-rates": lambda: ep.crypto_funding_rates(parts[2], **params),
+                "open-interest": lambda: ep.crypto_open_interest(parts[2], **params),
+                "defi-protocols": lambda: ep.defi_protocols(**params),
+                "onchain": lambda: ep.onchain_metrics(parts[2]),
+            }
+            if sub in m:
+                return m[sub]()
+            raise ValueError(f"Unknown crypto sub={sub!r}")
+
+        # options
+        if parts[0] == "options" and len(parts) >= 2:
+            sub, rest = parts[1], "/".join(parts[2:])
+            m = {
+                "chain": lambda: ep.options_chain(rest),
+                "greeks": lambda: ep.options_greeks(rest),
+                "iv-surface": lambda: ep.iv_surface(rest),
+                "unusual-activity": lambda: ep.unusual_options_activity(**params),
+                "vix-term-structure": lambda: ep.vix_term_structure(**params),
+            }
+            if sub in m:
+                return m[sub]()
+            raise ValueError(f"Unknown options sub={sub!r}")
+
+        # alternative
+        if parts[0] == "alternative" and len(parts) >= 2:
+            sub = parts[1]
+            m = {
+                "fear-greed": lambda: ep.fear_greed_index(**params),
+                "superinvestors": lambda: ep.superinvestors_list(),
+                "congress-trading": lambda: ep.congress_trading(**params),
+                "patents": lambda: ep.patents(parts[2], **params),
+                "gov-contracts": lambda: ep.government_contracts(parts[2], **params),
+                "google-trends": lambda: ep.google_trends(parts[2], **params),
+            }
+            if sub in m:
+                return m[sub]()
+            raise ValueError(f"Unknown alternative sub={sub!r}")
+
+        # news
+        if parts[0] == "news" and len(parts) >= 2:
+            if len(parts) == 2:
+                return ep.company_news(parts[1])
+            sub = parts[1]
+            m = {
+                "market": lambda: ep.market_news(**params),
+                "transcripts": lambda: ep.earnings_call_list(parts[2], **params),
+            }
+            if sub in m:
+                return m[sub]()
+            raise ValueError(f"Unknown news sub={sub!r}")
+
+        # etf
+        if parts[0] == "etf" and len(parts) >= 3:
+            dt, identifier = parts[1], parts[2]
+            m = {
+                "profile": lambda: ep.etf_profile(identifier),
+                "holdings": lambda: ep.etf_holdings(identifier),
+                "flows": lambda: ep.etf_flows(identifier, **params),
+            }
+            if dt in m:
+                return m[dt]()
+            raise ValueError(f"Unknown etf data_type={dt!r}")
+
+        # market
+        if parts[0] == "market" and len(parts) >= 2:
+            sub = parts[1]
+            m = {
+                "latest-quotes": lambda: ep.latest_quotes(**params),
+                "top-movers": lambda: ep.top_movers(**params),
+                "status": lambda: ep.market_status(),
+                "breadth": lambda: ep.market_breadth(**params),
+                "indicators": lambda: ep.market_indicators(**params),
+                "holidays": lambda: ep.market_holidays(),
+                "sector-performance": lambda: ep.sector_performance(**params),
+            }
+            if sub in m:
+                return m[sub]()
+            raise ValueError(f"Unknown market sub={sub!r}")
+
+        raise ValueError(f"Unsupported Eulerpool path: {path}")
 
     def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
         """Send an HTTP request, retrying on transient transport errors.

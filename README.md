@@ -3,11 +3,11 @@
     <source media="(prefers-color-scheme: dark)" srcset="Treasure Chest DataGraph Logo.png">
     <img src="Treasure Chest DataGraph Logo.png" alt="Arithmax Chest" width="120" height="120">
   </picture>
-  <h1 align="center">Arithmax Chest</h1>
+  <h1 align="center">achest</h1>
   <p align="center">
     <em>Normalized market data. One API. Every provider.</em>
     <br>
-    Equities &middot; Crypto &middot; Futures &middot; Macro
+    Equities &middot; Crypto &middot; Futures &middot; Macro &middot; Fundamentals &middot; Sentiment &middot; Options &middot; Alternatives
   </p>
   <p align="center">
     <a href="https://pypi.org/project/arithmaxchest/"><img src="https://img.shields.io/pypi/v/arithmaxchest?color=4B8BBE&label=PyPI" alt="PyPI"></a>
@@ -19,282 +19,180 @@
 
 ---
 
-**Arithmax Chest** gives you a single, normalized interface to fetch OHLCV market data across multiple asset classes — without worrying about which provider powers each symbol. Just ask for the data and the backend handles the routing.
+**Arithmax Chest** provides one Python client and FastAPI service for normalized market data and extended financial research data. OHLCV requests are routed across configured providers; Eulerpool adds fundamentals, macro, sentiment, derivatives, alternative data, news, and market analytics.
 
-## Quick Install
+## Install
 
 ```bash
 pip install arithmaxchest
 ```
 
-For optional providers:
+Optional dependencies:
+
 ```bash
-pip install arithmaxchest[all]        # everything (yfinance + databento + uvicorn)
-pip install arithmaxchest[yahoo]      # equities via yfinance
-pip install arithmaxchest[futures]    # futures via databento
-pip install arithmaxchest[server]     # self-host the API
+pip install arithmaxchest[yahoo]      # Yahoo Finance via yfinance
+pip install arithmaxchest[futures]    # Databento historical futures data
+pip install arithmaxchest[server]     # Uvicorn for self-hosting
+pip install arithmaxchest[all]        # Yahoo, Databento, and server extras
 ```
 
-## Complete User Guide
+Python 3.10 or newer is supported.
 
-### 1. Create a client
+## Market Data
 
 ```python
 from achest import MarketDataClient
 
-# Hosted API (defaults to https://achestv2.misango.me)
-client = MarketDataClient()
-
-# Or with your own server + token
-client = MarketDataClient(host="https://your-server.com", token="your-api-token")
+with MarketDataClient() as client:
+  data = client.get(
+    ["AAPL", "BTCUSDT", "ES.FUT", "^GSPC"],
+    "2025-01-01",
+    "2025-01-31",
+    resolution="daily",
+    provider="auto",
+  )
+  print(data.head())
 ```
 
-Always use as a context manager:
+`symbols` may be a string or an iterable of symbols. `start` and `end` accept ISO date strings, `datetime.date`, or `datetime.datetime` values. The client automatically splits long high-resolution requests into parallel chunks and merges the results in timestamp order.
+
+### Supported symbols
+
+| Asset class | Examples | Classification |
+|-------------|----------|----------------|
+| Equities and ETFs | `AAPL`, `MSFT`, `SPY` | Alphabetic symbols up to five characters |
+| Crypto | `BTCUSDT`, `ETHUSDT`, `BTC-USD` | Ends in `USDT`, `USDC`, or `-USD` |
+| Futures | `ES.FUT`, `NQ.FUT`, `CL.FUT` | `.FUT`, continuous-contract notation, or supported root |
+| Indices | `^GSPC`, `^VIX` | Starts with `^` |
+| Economic series | `GDP`, `UNRATE`, `CPIAUCSL`, `FEDFUNDS`, `DGS10` | Recognized economic symbols |
+
+Asset classes can be mixed in one request. Use `client.route(symbol, resolution, provider)` to inspect the selected route without fetching data.
+
+### Resolutions and providers
+
+Supported resolutions depend on the selected provider:
+
+| Resolution | Typical use |
+|------------|-------------|
+| `tick` | Tick or trade data |
+| `second` | One-second bars |
+| `minute` | One-minute bars |
+| `hour` | One-hour bars |
+| `daily` | Daily bars, the default |
+| `weekly`, `monthly` | Provider-supported low-frequency data |
+| `quarterly`, `annual` | Economic and fundamental series where supported |
+
+With `provider="auto"`, routing considers asset class, resolution, and configured credentials. Providers implemented by the service are `yahoo`, `binance`, `massive`, `databento`, `alpaca`, `tiingo`, `alpha_vantage`, `fred`, `quandl`, and `eulerpool`. A manually selected provider is validated against its capabilities before the request is sent.
+
 ```python
 with MarketDataClient() as client:
-    data = client.get(...)
+  minute_data = client.get("BTCUSDT", "2025-01-15", "2025-01-16", resolution="minute")
+  futures = client.get(["ES.FUT", "NQ.FUT"], "2025-01-01", "2025-01-31", provider="databento")
 ```
 
-### 2. The `get()` method — every parameter explained
+### Normalized response
+
+Market-data responses are pandas DataFrames with the columns `timestamp`, `symbol`, `provider`, `open`, `high`, `low`, `close`, and `volume`. Timestamps are normalized to UTC. Economic series are represented in the same shape, with the observation value copied into the OHLC fields and volume set to zero.
+
+## Extended Financial Data
+
+`MarketDataClient` also exposes Eulerpool-backed data. By default, these methods try the hosted Chest endpoint and fall back to direct Eulerpool access when the server is unavailable. Set `eulerpool_direct=True` to always use Eulerpool directly, or `False` to require the Chest server.
 
 ```python
-client.get(
-    symbols,          # list of ticker strings
-    start,            # start date — see date formats below
-    end,              # end date — see date formats below
-    resolution,       # bar size — see resolutions below
-    provider          # force a specific provider or "auto"
+with MarketDataClient() as client:
+  overview = client.fundamentals("AAPL", "overview")
+  income = client.fundamentals("AAPL", "income")
+  estimates = client.analyst("AAPL", "estimates")
+  holders = client.ownership("AAPL", "institutional")
+  sentiment = client.sentiment("AAPL", "news")
+  dividends = client.dividends_data("AAPL", "history")
+  short_interest = client.short_data("AAPL", "interest")
+```
+
+The grouped methods cover:
+
+| Method | Available data |
+|--------|----------------|
+| `fundamentals()` | Profiles, overview, income, balance sheet, cash flow, metrics, ESG, AAQS, fair value, growth, margins, and key figures |
+| `analyst()` | Estimates, price targets, upgrades, and recommendations |
+| `ownership()` | Institutional, fund, insider, and ETF exposure |
+| `dividends_data()` | Dividend history and quality |
+| `short_data()` | Short volume and short interest |
+| `sentiment()` | News, social, insider sentiment, and SWOT |
+| `macro()` | Country risk, calendars, FRED, credit spreads, and latest observations |
+| `crypto()` | Market overview, analysis, fear and greed, funding, open interest, DeFi, and on-chain data |
+| `options()` | Chains, Greeks, implied-volatility surfaces, unusual activity, and VIX term structure |
+| `alternative()` | Fear and greed, superinvestors, congressional trading, patents, government contracts, and Google Trends |
+| `etf()` | ETF profiles, holdings, and flows |
+| `market()` | Quotes, movers, status, breadth, and market indicators |
+| `news()` | Company and market news, transcripts, and transcript search |
+
+Additional helpers include `index_constituents()`, `yield_curve()`, `forex_rates()`, and `logo()`. These methods return dictionaries, lists, pandas DataFrames, or image bytes according to the endpoint.
+
+## Saving and Q Tables
+
+Use `download()` for files. Supported formats are `csv`, `parquet`, `json`, and `lean`; the default is `lean`. It returns a `pathlib.Path`.
+
+```python
+with MarketDataClient() as client:
+  client.download(
+    ["SPY", "QQQ"],
+    "2025-01-01",
+    "2025-01-31",
+    format="parquet",
+    output="downloads/etfs.parquet",
+  )
+  client.download(
+    ["AAPL", "MSFT"],
+    "2025-01-01",
+    "2025-01-31",
+    format="lean",
+    output="Data/equity/usa/daily",
+  )
+```
+
+When `output` is omitted, Lean files are placed under `Data/{asset}/{resolution}/`; non-Lean files use `Custom_Downloads/{symbol}_{resolution}.{extension}`. Lean output contains one zip archive per symbol and is compatible with [QuantConnect Lean](https://github.com/QuantConnect/Lean).
+
+For compact text suitable for an LLM or research prompt, use `q_table()`:
+
+```python
+with MarketDataClient() as client:
+  table = client.q_table(["AAPL"], "2025-01-01", "2025-01-10", include_metadata=True)
+```
+
+## Authentication and Configuration
+
+The hosted Chest API is `https://achestv2.misango.me`. Pass a server token with `token=` when the deployment requires one:
+
+```python
+client = MarketDataClient(
+  base_url="https://your-server.example.com",
+  token="your-data-api-token",
 )
 ```
 
-#### `symbols` — what tickers look like
+Provider credentials belong on the server, not in application code. Common variables are `DATA_API_TOKEN`, `DATA_BENTO_API_KEY`, `MASSIVE_API_KEY`, `ALPACA_API_KEY`, `ALPACA_SECRET_KEY`, `BINANCE_API_KEY`, `TIINGO_API_KEY`, `ALPHA_VANTAGE_API_KEY`, `FRED_API_KEY`, `QUANDL_API_KEY`, and `EULERPOOL_API_KEY` (or `EULER_TOKEN`).
 
-| Asset Class | Example Symbols | Notes |
-|-------------|----------------|-------|
-| **Equities** | `"AAPL"`, `"MSFT"`, `"TSLA"`, `"SPY"` | Standard tickers, 1–5 letters |
-| **Crypto** | `"BTCUSDT"`, `"ETHUSDT"`, `"SOLUSDT"`, `"BTC-USD"` | Ends in USDT, USDC, or -USD |
-| **Futures** | `"ES.FUT"`, `"NQ.FUT"`, `"CL.FUT"` | Ends in `.FUT` (continuous contracts) |
-| **Indices** | `"^GSPC"`, `"^VIX"`, `"^DJI"` | Starts with `^` |
-| **Economic** | `"GDP"`, `"UNRATE"`, `"CPIAUCSL"`, `"FEDFUNDS"` | Predefined macro symbols |
+## Data Pipeline
 
-You can mix asset classes in one call:
-```python
-client.get(["AAPL", "BTCUSDT", "ES.FUT", "^GSPC"], "2025-01-01", "2025-01-31")
-```
-
-#### `start` / `end` — date formats accepted
-
-All of these work:
-```python
-# ISO strings
-client.get(["AAPL"], "2025-01-01", "2025-01-31")
-
-# datetime.date objects
-from datetime import date
-client.get(["AAPL"], date(2025, 1, 1), date(2025, 1, 31))
-
-# datetime.datetime objects
-from datetime import datetime
-client.get(["AAPL"], datetime(2025, 1, 1), datetime(2025, 1, 31))
-```
-
-#### `resolution` — bar sizes
-
-| Resolution | Description | Example |
-|------------|-------------|---------|
-| `"tick"` | Trade-by-trade (raw ticks) | `client.get(["BTCUSDT"], ..., resolution="tick")` |
-| `"second"` | 1-second bars | `client.get(["AAPL"], ..., resolution="second")` |
-| `"minute"` | 1-minute bars | `client.get(["AAPL"], ..., resolution="minute")` |
-| `"hour"` | 1-hour bars | `client.get(["AAPL"], ..., resolution="hour")` |
-| `"daily"` | 1-day bars **(default)** | `client.get(["AAPL"], ..., resolution="daily")` |
-
-```python
-# Minute-level data for day trading
-client.get(["AAPL"], "2025-01-02", "2025-01-03", resolution="minute")
-
-# Hourly data for swing trading
-client.get(["BTCUSDT"], "2025-01-01", "2025-01-07", resolution="hour")
-```
-
-#### `provider` — auto vs. manual override
-
-| Value | Behavior |
-|-------|----------|
-| `"auto"` **(default)** | Backend selects the best available provider based on symbol + resolution + configured API keys |
-| `"yahoo"` | Force Yahoo Finance |
-| `"binance"` | Force Binance (crypto only) |
-| `"databento"` | Force Databento (futures, equities) |
-| `"alpaca"` | Force Alpaca |
-| `"tiingo"` | Force Tiingo |
-| `"alpha_vantage"` | Force Alpha Vantage |
-| `"fred"` | Force FRED (economic data only) |
-| `"quandl"` | Force Quandl |
-| `"massive"` | Force Massive |
-
-```python
-# Auto-select (recommended)
-client.get(["ES.FUT"], "2025-01-01", "2025-01-31", provider="auto")
-
-# Force a specific provider
-client.get(["AAPL"], "2025-01-01", "2025-01-31", provider="yahoo")
-```
-
-### 3. Full examples
-
-#### Equities — daily data
-```python
-from achest import MarketDataClient
-
-with MarketDataClient() as client:
-    aapl = client.get(["AAPL", "MSFT", "GOOGL"], "2025-01-01", "2025-01-31")
-    print(aapl.head())
-```
-
-#### Crypto — minute data
-```python
-with MarketDataClient() as client:
-    btc = client.get(["BTCUSDT"], "2025-01-15", "2025-01-16", resolution="minute")
-    print(btc.head())
-```
-
-#### Futures — daily via Databento
-```python
-with MarketDataClient() as client:
-    es = client.get(["ES.FUT", "NQ.FUT"], "2025-01-01", "2025-01-31")
-    print(es.head())
-```
-
-#### Mixed assets in one call
-```python
-with MarketDataClient() as client:
-    data = client.get(["AAPL", "BTCUSDT", "ES.FUT"], "2025-01-02", "2025-01-10")
-    print(data.groupby("symbol").tail(3))
-```
-
-### 4. Downloading data — two ways
-
-You can either save results from `get()` by passing `format` + `output`, or use the dedicated `download()` method. Their signatures are identical except:
-
-| | `get()` | `download()` |
-|--|---------|-------------|
-| **Default format** | `json` (returns DataFrame) | `lean` (writes Lean-format zip archives) |
-| **Returns** | `pd.DataFrame` | `Path` to the saved file/directory |
-| **Use case** | Interactive exploration + save | Batch / pipeline saving to disk |
-
-There is also a special **`lean` format** — it writes per-symbol zip archives compatible with [QuantConnect Lean](https://github.com/QuantConnect/Lean) for algorithmic backtesting.
-
----
-
-#### 4a. Save from `get()` — quick file output
-
-```python
-# CSV — human-readable
-client.get(["AAPL"], "2025-01-01", "2025-01-31", format="csv", output="aapl.csv")
-
-# Parquet — fast, compressed, great for large datasets
-client.get(["AAPL"], "2025-01-01", "2025-01-31", format="parquet", output="aapl.parquet")
-
-# JSON
-client.get(["AAPL"], "2025-01-01", "2025-01-31", format="json", output="aapl.json")
-```
-
-#### 4b. The `download()` method — dedicated saving
-
-```python
-client.download(
-    symbols,          # one or more tickers
-    start,            # start date
-    end,              # end date
-    resolution,       # bar size (default: "daily")
-    provider,         # force a provider or "auto" (default)
-    format,           # output format (default: "lean")
-    output,           # file path or directory (see auto-path rules below)
-)
-```
-
-| Parameter | Description |
-|-----------|-------------|
-| `format` | One of `"csv"`, `"parquet"`, `"json"`, or `"lean"` (default) |
-| `output` | File path (for csv/parquet/json) or directory path (for lean). When `None`, an asset-class-aware path is chosen automatically (see below). |
-
-##### Examples
-
-```python
-# Parquet file for analysis
-client.download(["SPY", "QQQ"], "2025-01-01", "2025-01-31",
-                format="parquet", output="spy-qqq.parquet")
-
-# CSV for spreadsheets
-client.download(["AAPL", "MSFT"], "2025-01-01", "2025-01-31",
-                format="csv", output="tech.csv")
-
-# Lean format — one zip per symbol, ready for QuantConnect backtesting
-client.download(["SPY", "QQQ"], "2025-01-01", "2025-01-31",
-                format="lean", output="data/equity/daily")
-```
-
-##### Auto-output path
-
-When you omit `output`, `download()` picks a directory based on the first symbol's asset class and the resolution:
-
-| Asset Type | Default Path |
-|-----------|-------------|
-| Equities / ETFs / Indices | `Data/equity/usa/{resolution}/` |
-| Crypto | `Data/crypto/{resolution}/` |
-| Futures | `Data/futures/{resolution}/` |
-| Forex | `Data/forex/{resolution}/` |
-| Everything else | `Data/other/{resolution}/` |
-
-## Data Shape
-
-All responses return normalized OHLCV data:
-
-| timestamp | symbol | provider | open | high | low | close | volume |
-|-----------|--------|----------|------|------|-----|-------|--------|
-| 2025-01-02 | AAPL | yahoo | 243.5 | 245.8 | 242.3 | 244.9 | 48234500 |
-| 2025-01-02 | BTCUSDT | binance | 94250 | 95800 | 93800 | 95430 | 12500 |
-| 2025-01-02 | ES.FUT | databento | 5939.25 | 5995.25 | 5874.75 | 5914.75 | 1714061 |
-
-Every row has:
-- **`timestamp`** — UTC-normalized datetime
-- **`symbol`** — the original ticker you requested
-- **`provider`** — which provider served the data
-- **`open`**, **`high`**, **`low`**, **`close`**, **`volume`** — OHLCV values
-
-## Symbol Reference
-
-| Input | Classified As | Routed To |
-|-------|---------------|-----------|
-| `AAPL` | equity | yahoo (default) |
-| `MSFT` | equity | yahoo (default) |
-| `BTCUSDT` | crypto | binance (if key exists) or yahoo |
-| `ETHUSDT` | crypto | binance (if key exists) or yahoo |
-| `ES.FUT` | futures | databento (if key exists) or massive |
-| `NQ.FUT` | futures | databento (if key exists) or massive |
-| `CL.FUT` | futures | databento (if key exists) or massive |
-| `^GSPC` | index | yahoo |
-| `^VIX` | index | yahoo |
-| `GDP` | economic | fred (if key exists) or quandl |
-| `UNRATE` | economic | fred (if key exists) or quandl |
+`Data_Pipeline/` contains provider-specific downloaders, validation utilities, configuration, and the interactive pipeline entry point. It supports bulk historical collection for equities, crypto, futures, options, forex, macro data, and alternative sources. See [documentation.md](documentation.md) for provider routing, deployment, environment setup, and API details.
 
 ## Self-Hosting
-
-Arithmax Chest is also a FastAPI server you can deploy yourself:
 
 ```bash
 pip install arithmaxchest[all]
 uvicorn achest.server:app --host 0.0.0.0 --port 8000
 ```
 
-With Docker and EC2 support — see the [documentation](documentation.md) for deployment details.
+The FastAPI service exposes `/health`, `/v1/providers`, `/v1/route`, `/v1/data`, and the extended `/v1/eulerpool/...` endpoints. Docker and EC2 deployment files are included in the repository.
 
 ## Why Arithmax Chest?
 
-- **Normalized schema** — Every symbol returns the same columns regardless of provider
-- **Provider abstraction** — The backend picks the best source; your code never changes
-- **Multi-asset** — Equities, crypto, futures, indices, economic indicators — one API
-- **Research-ready** — Clean DataFrames with no provider-specific wrangling
-- **Portable** — Works in notebooks, scripts, pipelines, and production systems
+- **One interface** for routed OHLCV and extended financial research data
+- **Normalized DataFrames** across providers and asset classes
+- **Automatic fallback and chunking** for resilient historical retrieval
+- **Research-ready exports** including Parquet, JSON, CSV, and Lean archives
+- **Usable as a library, hosted API, self-hosted service, or ingestion pipeline**
 
 ## License
 

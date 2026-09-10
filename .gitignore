@@ -2,10 +2,10 @@ updating.md
 .env
 /Data
 /Data_Pipeline/.env
-/Data_Pipeline/
 **/__pycache__/**
 /arithmaxchest.egg-info
 /.pytest_cache
 /tests
 /dist
 /Custom_Downloads
+***.env***

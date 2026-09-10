@@ -1,0 +1,57 @@
+dependencies = [
+    # Core Framework & Utilities
+    "fastapi>=0.110",
+    "httpx>=0.27",
+    "pydantic",
+    "pydantic-settings",
+    "python-dotenv>=1.0.1",
+    "python-decouple",
+    "click",
+    "typer",
+    "rich",
+    "colorama",
+    # Async & Networking
+    "asyncio-mqtt",
+    "aiofiles",
+    "uvloop",
+    "requests>=2.31",
+    # Data Analysis & Science
+    "numpy",
+    "pandas>=2.0",
+    "scipy",
+    "scikit-learn",
+    "python-dateutil",
+    "pytz",
+    "tqdm",
+    # Data Formats & Storage
+    "pyarrow>=14.0",
+    "fastparquet",
+    "tables",
+    "h5py",
+    # Data Visualization
+    "matplotlib",
+    "seaborn",
+    "plotly",
+    # Market & Financial Data APIs
+    "alpaca-trade-api",
+    "alpha-vantage",
+    "databento",
+    "fredapi",
+    "investpy",
+    "nsepy",
+    "pandas_datareader",
+    "polygon-api-client",
+    "python-binance",
+    "quandl",
+    "tiingo",
+    "yfinance",
+    # Web Scraping & Parsing
+    "beautifulsoup4",
+    "html5lib",
+    "lxml",
+    "selenium",
+    "webdriver-manager",
+    # AI & Machine Learning
+    "openai",
+    "semantic-kernel",
+]
