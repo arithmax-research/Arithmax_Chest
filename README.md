@@ -12,7 +12,7 @@
   <p align="center">
     <a href="https://pypi.org/project/arithmaxchest/"><img src="https://img.shields.io/pypi/v/arithmaxchest?color=4B8BBE&label=PyPI" alt="PyPI"></a>
     <a href="https://pypi.org/project/arithmaxchest/"><img src="https://img.shields.io/pypi/pyversions/arithmaxchest?color=4B8BBE" alt="Python Versions"></a>
-    <a href="https://achestv2.misango.me/health"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fachestv2.misango.me%2Fhealth&label=API&color=22C55E" alt="API Status"></a>
+    <a href="https://achestv2.misango.me/health"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fachestv2.misango.me%2Fhealth&query=%24.status&label=system&success_message=ok&color=green&failed_color=red" alt="API Status"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
   </p>
 </p>
