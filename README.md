@@ -19,7 +19,7 @@
 
 ---
 
-**Arithmax Chest** provides one Python client and FastAPI service for normalized market data and extended financial research data. OHLCV requests are routed across configured providers; Eulerpool adds fundamentals, macro, sentiment, derivatives, alternative data, news, and market analytics.
+**Arithmax Chest** provides one Python client and FastAPI service for normalized market data and extended financial research data with atleast 200+ variations"
 
 ## Install
 
