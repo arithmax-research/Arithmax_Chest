@@ -404,7 +404,7 @@ class MarketDataClient:
         destination.write_bytes(response.content)
         return destination
 
-# ── Eulerpool Extended Data Methods ─────────────────────────────────────
+    # ── Eulerpool Extended Data Methods ─────────────────────────────────────
 
     def fundamentals(self, identifier: str, data_type: str = "overview") -> dict | list:
         return self._euler_request(f"fundamentals/{data_type}/{identifier}")
