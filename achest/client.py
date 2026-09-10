@@ -170,7 +170,13 @@ class MarketDataClient:
         return EulerpoolProvider()
 
     def _euler_request(self, path: str, **params) -> Any:
-        """Fetch from Eulerpool via server, or direct if configured/server-unavailable."""
+        """Fetch from Eulerpool via server, or direct if configured/server-unavailable.
+
+        Auto-converts JSON responses to pandas DataFrames when possible:
+        - list-of-dicts → multi-row DataFrame
+        - single flat dict → 1-row DataFrame
+        - nested dict / scalar / str → unchanged
+        """
         if self._eulerpool_direct is True:
             return self._euler_direct(path, **params)
         # Try server
@@ -179,7 +185,17 @@ class MarketDataClient:
             resp.raise_for_status()
             if self._eulerpool_direct is None:
                 self._state.setdefault("euler_server_ok", True)
-            return resp.json()
+            data = resp.json()
+            import pandas as pd
+            # List of dicts → multi-row DataFrame
+            if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+                return pd.DataFrame(data)
+            # Single flat dict → 1-row DataFrame
+            if isinstance(data, dict) and not any(
+                isinstance(v, (dict, list)) for v in data.values()
+            ):
+                return pd.DataFrame([data])
+            return data
         except Exception as exc:
             if self._eulerpool_direct is False:
                 raise  # user explicitly asked for server
@@ -649,6 +665,75 @@ class MarketDataClient:
         """Eulerpool market-wide data (latest-quotes, status, breadth, ...)."""
         return self._euler_request(f"market/{endpoint}", **params)
     market_data_ext = market  # alias
+
+    def shipping_vessels(
+        self, vessel_type: str | None = None, vessel_class: str | None = None,
+        flag: str | None = None, search: str | None = None,
+        limit: int = 100, offset: int = 0,
+    ) -> dict | list:
+        """Search the global tanker, LNG, and LPG vessel registry."""
+        return self._euler_request(
+            "shipping/vessels", vessel_type=vessel_type, vessel_class=vessel_class,
+            flag=flag, search=search, limit=limit, offset=offset,
+        )
+
+    def shipping_vessel(self, imo: int) -> dict | list:
+        """Get vessel details and current position by IMO number."""
+        return self._euler_request(f"shipping/vessels/{imo}")
+
+    def shipping_vessel_track(self, imo: int, days: int = 7, limit: int = 1000) -> dict | list:
+        """Get historical AIS positions for a vessel."""
+        return self._euler_request(f"shipping/vessels/{imo}/track", days=days, limit=limit)
+
+    def shipping_positions(
+        self, bbox: str | None = None, vessel_type: str | None = None,
+        min_speed: float | None = None,
+    ) -> dict | list:
+        """Get current vessel positions, optionally filtered by bounding box."""
+        return self._euler_request(
+            "shipping/positions", bbox=bbox, vessel_type=vessel_type, min_speed=min_speed,
+        )
+
+    def shipping_voyages(
+        self, status: str | None = None, cargo_type: str | None = None,
+        imo: int | None = None, origin_port: int | None = None,
+        destination_port: int | None = None, limit: int = 100, offset: int = 0,
+    ) -> dict | list:
+        """List active and recent shipping voyages with filters."""
+        return self._euler_request(
+            "shipping/voyages", status=status, cargo_type=cargo_type, imo=imo,
+            origin_port=origin_port, destination_port=destination_port,
+            limit=limit, offset=offset,
+        )
+
+    def shipping_cargoes(
+        self, product: str | None = None, origin_country: str | None = None,
+        destination_country: str | None = None, start_date: str | None = None,
+        end_date: str | None = None, limit: int = 100, offset: int = 0,
+    ) -> dict | list:
+        """Track cargo movements by product, origin, destination, and date."""
+        return self._euler_request(
+            "shipping/cargoes", product=product, origin_country=origin_country,
+            destination_country=destination_country, start_date=start_date,
+            end_date=end_date, limit=limit, offset=offset,
+        )
+
+    def shipping_ports(
+        self, country_code: str | None = None, port_type: str | None = None,
+        search: str | None = None, limit: int = 100,
+    ) -> dict | list:
+        """Search global oil, LNG, and shipping ports and terminals."""
+        return self._euler_request(
+            "shipping/ports", country_code=country_code, port_type=port_type,
+            search=search, limit=limit,
+        )
+
+    def shipping_port_activity(self, port_id: int, days: int = 30, limit: int = 100) -> dict | list:
+        """Get recent voyages arriving at or departing from a port."""
+        return self._euler_request(
+            f"shipping/ports/{port_id}/activity", days=days, limit=limit,
+        )
+
     def q_table(self, symbols: Iterable[str], start: date | str, end: date | str, resolution: str = "daily", provider: str = "auto", include_metadata: bool = False) -> str:
         frame = self.get(symbols, start, end, resolution=resolution, provider=provider)
         return to_q_table(frame, include_metadata=include_metadata)
