@@ -173,7 +173,7 @@ class MarketDataClient:
         """Fetch from Eulerpool via server, or direct if configured/server-unavailable.
 
         Auto-converts JSON responses to pandas DataFrames when possible:
-        - list-of-dicts → multi-row DataFrame
+        - list-of-dicts → multi-row DataFrame (even if empty list)
         - single flat dict → 1-row DataFrame
         - nested dict / scalar / str → unchanged
         """
@@ -187,6 +187,9 @@ class MarketDataClient:
                 self._state.setdefault("euler_server_ok", True)
             data = resp.json()
             import pandas as pd
+            # Empty list → empty DataFrame
+            if isinstance(data, list) and len(data) == 0:
+                return pd.DataFrame()
             # List of dicts → multi-row DataFrame
             if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
                 return pd.DataFrame(data)
