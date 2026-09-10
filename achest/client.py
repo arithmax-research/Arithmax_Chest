@@ -351,6 +351,218 @@ class MarketDataClient:
         destination.write_bytes(response.content)
         return destination
 
+# ── Eulerpool Extended Data Methods ─────────────────────────────────────
+
+    def fundamentals(self, identifier: str, data_type: str = "overview") -> dict | list:
+        """Fetch Eulerpool fundamental data for a security.
+
+        Parameters
+        ----------
+        identifier : str
+            ISIN, ticker, CUSIP, SEDOL, or WKN.
+        data_type : str
+            One of ``profile``, ``overview``, ``income``, ``balance``,
+            ``cashflow``, ``metrics``, ``key-figures``, ``growth``,
+            ``margins``, ``esg``, ``aaqs``, ``fair-value``.
+
+        Returns
+        -------
+        dict or list
+        """
+        resp = self._request("get", f"/v1/eulerpool/fundamentals/{data_type}/{identifier}")
+        resp.raise_for_status()
+        return resp.json()
+
+    def analyst(self, identifier: str, data_type: str = "estimates") -> dict | list:
+        """Fetch Eulerpool analyst data.
+
+        Parameters
+        ----------
+        identifier : str
+        data_type : str
+            One of ``estimates``, ``price-target``, ``upgrades``, ``recommendations``.
+        """
+        resp = self._request("get", f"/v1/eulerpool/analyst/{data_type}/{identifier}")
+        resp.raise_for_status()
+        return resp.json()
+
+    def ownership(self, identifier: str, data_type: str = "institutional") -> list:
+        """Fetch Eulerpool ownership data.
+
+        Parameters
+        ----------
+        identifier : str
+        data_type : str
+            One of ``institutional``, ``fund``, ``insider``, ``etf-exposure``.
+        """
+        resp = self._request("get", f"/v1/eulerpool/ownership/{data_type}/{identifier}")
+        resp.raise_for_status()
+        return resp.json()
+
+    def macro(self, endpoint: str, **params) -> dict | list:
+        """Fetch Eulerpool macro-economic data.
+
+        Examples
+        --------
+        client.macro("country-risk")
+        client.macro("fred/GDP", limit=100)
+        client.macro("fred-latest")
+        client.macro("credit-spreads", days=365)
+        """
+        resp = self._request("get", f"/v1/eulerpool/macro/{endpoint}", params=params)
+        resp.raise_for_status()
+        return resp.json()
+
+    def crypto_data(self, endpoint: str, **params) -> dict | list:
+        """Fetch Eulerpool crypto extended data.
+
+        Examples
+        --------
+        client.crypto_data("top")
+        client.crypto_data("market-overview")
+        client.crypto_data("analysis/BTC")
+        client.crypto_data("fear-greed", days=90)
+        client.crypto_data("funding-rates/BTC", days=30)
+        client.crypto_data("onchain/BTC")
+        """
+        resp = self._request("get", f"/v1/eulerpool/crypto/{endpoint}", params=params)
+        resp.raise_for_status()
+        return resp.json()
+
+    def options_data(self, endpoint: str, **params) -> dict | list:
+        """Fetch Eulerpool options & derivatives data.
+
+        Examples
+        --------
+        client.options_data("chain/AAPL")
+        client.options_data("greeks/AAPL")
+        client.options_data("iv-surface/AAPL")
+        client.options_data("unusual-activity", min_volume=1000)
+        client.options_data("vix-term-structure")
+        """
+        resp = self._request("get", f"/v1/eulerpool/options/{endpoint}", params=params)
+        resp.raise_for_status()
+        return resp.json()
+
+    def alternative_data(self, endpoint: str, **params) -> dict | list:
+        """Fetch Eulerpool alternative data.
+
+        Examples
+        --------
+        client.alternative_data("fear-greed")
+        client.alternative_data("superinvestors")
+        client.alternative_data("congress-trading", symbol="AAPL")
+        client.alternative_data("patents/AAPL")
+        client.alternative_data("google-trends/AAPL")
+        """
+        resp = self._request("get", f"/v1/eulerpool/alternative/{endpoint}", params=params)
+        resp.raise_for_status()
+        return resp.json()
+
+    def news_research(self, endpoint: str, **params) -> list:
+        """Fetch Eulerpool news & research data.
+
+        Examples
+        --------
+        client.news_research("AAPL")
+        client.news_research("market", limit=50)
+        client.news_research("transcripts/list/AAPL")
+        client.news_research("transcripts/search", q="AI", ticker="MSFT")
+        """
+        resp = self._request("get", f"/v1/eulerpool/news/{endpoint}", params=params)
+        resp.raise_for_status()
+        return resp.json()
+
+    def etf_data(self, identifier: str, data_type: str = "profile") -> dict | list:
+        """Fetch Eulerpool ETF-specific data.
+
+        Parameters
+        ----------
+        identifier : str
+        data_type : str
+            One of ``profile``, ``holdings``, ``flows``.
+        """
+        resp = self._request("get", f"/v1/eulerpool/etf/{data_type}/{identifier}")
+        resp.raise_for_status()
+        return resp.json()
+
+    def market_data_ext(self, endpoint: str, **params) -> dict | list:
+        """Fetch Eulerpool market-wide data.
+
+        Examples
+        --------
+        client.market_data_ext("latest-quotes", stocks="AAPL,MSFT")
+        client.market_data_ext("top-movers")
+        client.market_data_ext("status")
+        client.market_data_ext("breadth", days=30)
+        """
+        resp = self._request("get", f"/v1/eulerpool/market/{endpoint}", params=params)
+        resp.raise_for_status()
+        return resp.json()
+
+    def index_constituents(self, index_id: str = "sp500", start: int = 0, end: int = 500) -> list:
+        """Fetch index constituents from Eulerpool."""
+        resp = self._request("get", f"/v1/eulerpool/index/{index_id}", params={"start": start, "end": end})
+        resp.raise_for_status()
+        return resp.json()
+
+    def yield_curve(self, country: str = "US", days: int = 90) -> list:
+        """Fetch government bond yield curve from Eulerpool."""
+        resp = self._request("get", "/v1/eulerpool/bonds/yield-curve", params={"country": country, "days": days})
+        resp.raise_for_status()
+        return resp.json()
+
+    def forex_rates(self, base: str = "USD") -> list:
+        """Fetch current exchange rates from Eulerpool."""
+        resp = self._request("get", f"/v1/eulerpool/forex/rates/{base}")
+        resp.raise_for_status()
+        return resp.json()
+
+    def logo(self, symbol: str, size: int = 128) -> bytes:
+        """Fetch company logo image by ticker symbol (returns raw PNG bytes)."""
+        resp = self._request("get", f"/v1/eulerpool/logo/{symbol}", params={"size": size})
+        resp.raise_for_status()
+        return resp.content
+        return resp.json()
+
+    def dividends_data(self, identifier: str, data_type: str = "history") -> dict | list:
+        """Fetch Eulerpool dividend data.
+
+        Parameters
+        ----------
+        identifier : str
+        data_type : str
+            One of ``history``, ``quality``.
+        """
+        resp = self._request("get", f"/v1/eulerpool/dividends/{data_type}/{identifier}")
+        resp.raise_for_status()
+        return resp.json()
+
+    def short_data(self, identifier: str, data_type: str = "volume") -> list:
+        """Fetch Eulerpool short-selling data.
+
+        Parameters
+        ----------
+        identifier : str
+        data_type : str
+            One of ``volume``, ``interest``.
+        """
+        resp = self._request("get", f"/v1/eulerpool/short/{data_type}/{identifier}")
+        resp.raise_for_status()
+        return resp.json()
+
+    def sentiment_data(self, identifier: str, data_type: str = "news") -> dict | list:
+        """Fetch Eulerpool sentiment data.
+
+        Parameters
+        ----------
+        identifier : str
+        data_type : str
+            One of ``news``, ``social``, ``insider``, ``swot``.
+        """
+        resp = self._request("get", f"/v1/eulerpool/sentiment/{data_type}/{identifier}")
+        resp.raise_for_status()
+        return resp.json()
     def q_table(self, symbols: Iterable[str], start: date | str, end: date | str, resolution: str = "daily", provider: str = "auto", include_metadata: bool = False) -> str:
         frame = self.get(symbols, start, end, resolution=resolution, provider=provider)
         return to_q_table(frame, include_metadata=include_metadata)

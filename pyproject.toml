@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "arithmaxchest"
-version = "0.4.0"
-description = "Normalized OHLCV market data for equities, crypto, futures, and macro — one API, many providers"
+version = "0.5.0"
+description = "Normalized market data + Eulerpool financial API: equities, crypto, fundamentals, macro, sentiment, options, alternatives"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -45,6 +45,7 @@ yahoo = ["yfinance>=0.2.40"]
 futures = ["databento>=0.79"]
 server = ["uvicorn[standard]>=0.29"]
 dev = ["pytest>=8.0"]
+eulerpool = []  # uses built-in requests — no extra deps needed
 all = [
     "yfinance>=0.2.40",
     "databento>=0.79",

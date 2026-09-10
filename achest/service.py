@@ -57,6 +57,10 @@ PROVIDER_CAPABILITIES = {
         "assets": {"equity", "etf", "index", "crypto", "economic", "futures"},
         "resolutions": {"daily", "weekly", "monthly", "quarterly", "annual"},
     },
+    "eulerpool": {
+        "assets": {"equity", "etf", "index", "crypto", "forex", "futures", "economic", "commodity", "options"},
+        "resolutions": {"daily", "weekly", "monthly"},
+    },
 }
 FUTURES_ROOTS = {"ES", "NQ", "YM", "RTY", "CL", "GC", "SI", "ZB", "ZN", "NG", "ZS", "ZC", "ZW"}
 ECONOMIC_SYMBOLS = {"GDP", "UNRATE", "CPIAUCSL", "FEDFUNDS", "DGS10"}
@@ -92,13 +96,19 @@ _PROVIDER_KEY_MAP = {
     "quandl": "QUANDL_API_KEY",
     "binance": "BINANCE_API_KEY",   # requires API key
     "yahoo": "",                     # public API, no key required
+    "eulerpool": "EULERPOOL_API_KEY",
 }
 
 
 def _provider_key_configured(provider: str) -> bool:
     """Return True if the provider can be used (key configured or not needed)."""
     env_var = _PROVIDER_KEY_MAP.get(provider, "")
-    return not env_var or bool(os.getenv(env_var))
+    if not env_var:
+        return True
+    # Eulerpool supports both EULERPOOL_API_KEY and EULER_TOKEN
+    if provider == "eulerpool":
+        return bool(os.getenv("EULERPOOL_API_KEY") or os.getenv("EULER_TOKEN"))
+    return bool(os.getenv(env_var))
 
 
 def select_provider(symbol: str, requested: str, resolution: str) -> str:
@@ -111,13 +121,15 @@ def select_provider(symbol: str, requested: str, resolution: str) -> str:
             raise UnsupportedRequest(f"Provider {requested!r} is not configured on this server (missing API key)")
         return requested
     preferences = {
-        "futures": ["databento", "massive"],
-        "crypto": ["binance", "yahoo", "tiingo", "alpha_vantage"],
-        "equity": ["yahoo", "alpaca", "tiingo", "alpha_vantage"],
-        "etf": ["yahoo", "alpaca", "tiingo"],
-        "index": ["yahoo", "alpaca", "tiingo"],
-        "economic": ["fred", "quandl"],
-    }.get(asset, ["yahoo"])
+        "futures": ["databento", "massive", "eulerpool"],
+        "crypto": ["binance", "yahoo", "tiingo", "alpha_vantage", "eulerpool"],
+        "equity": ["yahoo", "alpaca", "tiingo", "alpha_vantage", "eulerpool"],
+        "etf": ["yahoo", "alpaca", "tiingo", "eulerpool"],
+        "index": ["yahoo", "alpaca", "tiingo", "eulerpool"],
+        "economic": ["fred", "quandl", "eulerpool"],
+        "options": ["eulerpool"],
+        "commodity": ["eulerpool"],
+    }.get(asset, ["yahoo", "eulerpool"])
     for provider in preferences:
         if resolution in PROVIDER_CAPABILITIES[provider]["resolutions"] and _provider_key_configured(provider):
             return provider
@@ -382,10 +394,33 @@ def _quandl(symbol: str, request: DataRequest) -> pd.DataFrame:
     } for row in data.get("data", []))
 
 
+def _eulerpool(symbol: str, request: DataRequest) -> pd.DataFrame:
+    """Fetch OHLCV data from Eulerpool API as a fallback provider.
+
+    Eulerpool does not return true OHLCV via its simple quotes endpoint
+    (it returns ``{timestamp, price}`` only), but can serve as a fallback
+    when other providers have gaps.  The *price* field is mapped to the
+    ``close`` column; ``open`` / ``high`` / ``low`` are copied from it.
+    """
+    from .eulerpool_provider import EulerpoolProvider
+
+    ep = EulerpoolProvider()
+    asset = classify_symbol(symbol)
+    if asset in ("crypto",):
+        return ep.crypto_quotes(symbol, request.start, request.end)
+    if asset in ("commodity",):
+        return ep.commodity_quotes(symbol, request.start, request.end)
+    # equity, etf, index, forex — all use the same generic path
+    return ep.equity_quotes(symbol, request.start, request.end)
+
+
 def fetch_symbol(request: DataRequest, symbol: str) -> tuple[str, pd.DataFrame]:
     provider = select_provider(symbol, request.provider, request.resolution)
-    fetchers = {"yahoo": _yahoo, "binance": _binance, "massive": _massive, "databento": _databento, "fred": _fred,
-                "alpaca": _alpaca, "tiingo": _tiingo, "alpha_vantage": _alpha_vantage, "quandl": _quandl}
+    fetchers = {"yahoo": _yahoo, "binance": _binance, "massive": _massive,
+                "databento": _databento, "fred": _fred,
+                "alpaca": _alpaca, "tiingo": _tiingo,
+                "alpha_vantage": _alpha_vantage, "quandl": _quandl,
+                "eulerpool": _eulerpool}
     frame = fetchers[provider](symbol, request)
     if not frame.empty:
         frame.index = pd.to_datetime(frame.index, utc=True)

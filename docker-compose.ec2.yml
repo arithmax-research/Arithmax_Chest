@@ -11,6 +11,7 @@ services:
     expose:
       - "8000"
     environment:
+      EULERPOOL_API_KEY: ${EULERPOOL_API_KEY:-}
       DATA_API_TOKEN: ${DATA_API_TOKEN:-}
       BINANCE_BASE_URL: ${BINANCE_BASE_URL:-https://api.binance.us}
       BINANCE_API_KEY: ${BINANCE_API_KEY:-}
