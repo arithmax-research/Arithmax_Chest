@@ -603,7 +603,7 @@ class MarketDataClient:
     def index_constituents(self, index_id: str = "sp500", start: int = 0, end: int = 500) -> list:
         return self._euler_request(f"index/{index_id}", start=start, end=end)
 
-    def yield_curve(self, country: str = "US", days: int = 90) -> list:
+    def yield_curve(self, country: str , days: int = 90) -> list:
         return self._euler_request("bonds/yield-curve", country=country, days=days)
 
     def forex_rates(self, base: str = "USD") -> list:

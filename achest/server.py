@@ -1096,4 +1096,560 @@ def eulerpool_fail_to_deliver(ticker: str, days: int = Query(default=90)):
 def eulerpool_patent_stats(ticker: str):
     """Patent statistics for a company."""
     return _json_response(_get_eulerpool().patent_statistics(ticker).to_dict(orient="records"))
+# ── Shipping ────────────────────────────────────────────────────────────
+
+@app.get("/v1/eulerpool/shipping/vessels", dependencies=[Depends(require_client_token)])
+def eulerpool_shipping_vessels(vessel_type: str | None = Query(None), vessel_class: str | None = Query(None), flag: str | None = Query(None), search: str | None = Query(None), limit: int = Query(default=100), offset: int = Query(default=0)):
+    """Search global tanker/LNG/LPG vessel registry."""
+    return _json_response(_get_eulerpool().shipping_vessels(vessel_type, vessel_class, flag, search, limit, offset).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/shipping/vessels/{imo}", dependencies=[Depends(require_client_token)])
+def eulerpool_shipping_vessel(imo: int):
+    """Get vessel details by IMO number."""
+    return _json_response(_get_eulerpool().shipping_vessel(imo))
+
+@app.get("/v1/eulerpool/shipping/vessels/{imo}/track", dependencies=[Depends(require_client_token)])
+def eulerpool_shipping_vessel_track(imo: int, days: int = Query(default=7), limit: int = Query(default=1000)):
+    """Historical AIS vessel track."""
+    return _json_response(_get_eulerpool().shipping_vessel_track(imo, days, limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/shipping/positions", dependencies=[Depends(require_client_token)])
+def eulerpool_shipping_positions(bbox: str | None = Query(None), vessel_type: str | None = Query(None), min_speed: float | None = Query(None)):
+    """Current vessel positions within a bounding box."""
+    return _json_response(_get_eulerpool().shipping_positions(bbox, vessel_type, min_speed).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/shipping/voyages", dependencies=[Depends(require_client_token)])
+def eulerpool_shipping_voyages(status: str | None = Query(None), cargo_type: str | None = Query(None), imo: int | None = Query(None), origin_port: int | None = Query(None), destination_port: int | None = Query(None), limit: int = Query(default=100), offset: int = Query(default=0)):
+    """Active and recent voyages."""
+    return _json_response(_get_eulerpool().shipping_voyages(status, cargo_type, imo, origin_port, destination_port, limit, offset).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/shipping/cargoes", dependencies=[Depends(require_client_token)])
+def eulerpool_shipping_cargoes(product: str | None = Query(None), origin_country: str | None = Query(None), destination_country: str | None = Query(None), start_date: str | None = Query(None), end_date: str | None = Query(None), limit: int = Query(default=100), offset: int = Query(default=0)):
+    """Cargo movements by product, origin, destination."""
+    return _json_response(_get_eulerpool().shipping_cargoes(product, origin_country, destination_country, start_date, end_date, limit, offset).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/shipping/ports", dependencies=[Depends(require_client_token)])
+def eulerpool_shipping_ports(country_code: str | None = Query(None), port_type: str | None = Query(None), search: str | None = Query(None), limit: int = Query(default=100)):
+    """List global oil/LNG ports and terminals."""
+    return _json_response(_get_eulerpool().shipping_ports(country_code, port_type, search, limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/shipping/ports/{port_id}/activity", dependencies=[Depends(require_client_token)])
+def eulerpool_shipping_port_activity(port_id: int, days: int = Query(default=30), limit: int = Query(default=100)):
+    """Recent voyages arriving at or departing from a port (e.g. Port of LA)."""
+    return _json_response(_get_eulerpool().shipping_port_activity(port_id, days, limit).to_dict(orient="records"))
+# ── Energy ──────────────────────────────────────────────────────────────
+
+@app.get("/v1/eulerpool/energy/pipelines", dependencies=[Depends(require_client_token)])
+def eulerpool_energy_pipelines(commodity: str | None = Query(None), country: str | None = Query(None), status: str | None = Query(None), limit: int = Query(default=200)):
+    """List global oil and gas pipelines."""
+    return _json_response(_get_eulerpool().energy_pipelines(commodity, country, status, limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/energy/pipelines/{pipeline_id}", dependencies=[Depends(require_client_token)])
+def eulerpool_energy_pipeline(pipeline_id: int):
+    """Pipeline details including latest flow."""
+    return _json_response(_get_eulerpool().energy_pipeline(pipeline_id))
+
+@app.get("/v1/eulerpool/energy/pipelines/{pipeline_id}/flows", dependencies=[Depends(require_client_token)])
+def eulerpool_energy_pipeline_flows(pipeline_id: int, start_date: str | None = Query(None), end_date: str | None = Query(None), limit: int = Query(default=500)):
+    """Historical pipeline flow time-series."""
+    return _json_response(_get_eulerpool().energy_pipeline_flows(pipeline_id, start_date, end_date, limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/energy/latest", dependencies=[Depends(require_client_token)])
+def eulerpool_energy_latest():
+    """Latest energy data snapshot."""
+    return _json_response(_get_eulerpool().energy_latest())
+
+@app.get("/v1/eulerpool/energy/natural-gas", dependencies=[Depends(require_client_token)])
+def eulerpool_energy_natural_gas(start_date: str | None = Query(None), end_date: str | None = Query(None), limit: int = Query(default=100)):
+    """Weekly natural gas data."""
+    return _json_response(_get_eulerpool().energy_natural_gas(start_date, end_date, limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/energy/petroleum", dependencies=[Depends(require_client_token)])
+def eulerpool_energy_petroleum(start_date: str | None = Query(None), end_date: str | None = Query(None), limit: int = Query(default=100)):
+    """Weekly petroleum status report."""
+    return _json_response(_get_eulerpool().energy_petroleum(start_date, end_date, limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/energy/coal", dependencies=[Depends(require_client_token)])
+def eulerpool_energy_coal(start_date: str | None = Query(None), end_date: str | None = Query(None), limit: int = Query(default=100)):
+    """Quarterly coal data."""
+    return _json_response(_get_eulerpool().energy_coal(start_date, end_date, limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/energy/electricity", dependencies=[Depends(require_client_token)])
+def eulerpool_energy_electricity(start_date: str | None = Query(None), end_date: str | None = Query(None), limit: int = Query(default=100)):
+    """Monthly electricity data."""
+    return _json_response(_get_eulerpool().energy_electricity(start_date, end_date, limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/energy/jodi", dependencies=[Depends(require_client_token)])
+def eulerpool_energy_jodi(commodity: str = Query(default="oil"), country_code: str | None = Query(None), limit: int = Query(default=100)):
+    """JODI oil & gas flows data."""
+    return _json_response(_get_eulerpool().energy_jodi(commodity, country_code, limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/energy/storage", dependencies=[Depends(require_client_token)])
+def eulerpool_energy_storage(limit: int = Query(default=100)):
+    """List storage facilities."""
+    return _json_response(_get_eulerpool().energy_storage(limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/energy/storage/{facility_id}/levels", dependencies=[Depends(require_client_token)])
+def eulerpool_energy_storage_levels(facility_id: int, start_date: str | None = Query(None), end_date: str | None = Query(None), limit: int = Query(default=100)):
+    """Historical storage levels."""
+    return _json_response(_get_eulerpool().energy_storage_levels(facility_id, start_date, end_date, limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/energy/storage/summary", dependencies=[Depends(require_client_token)])
+def eulerpool_energy_storage_summary():
+    """Storage summary across all facilities."""
+    return _json_response(_get_eulerpool().energy_storage_summary())
+# ── Government ──────────────────────────────────────────────────────────
+
+@app.get("/v1/eulerpool/government/treasury/auctions", dependencies=[Depends(require_client_token)])
+def eulerpool_gov_treasury_auctions(limit: int = Query(default=100)):
+    """US Treasury auction results."""
+    return _json_response(_get_eulerpool().government_treasury_auctions(limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/government/treasury/debt", dependencies=[Depends(require_client_token)])
+def eulerpool_gov_treasury_debt(limit: int = Query(default=100)):
+    """US Treasury debt outstanding."""
+    return _json_response(_get_eulerpool().government_treasury_debt(limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/government/treasury/yields", dependencies=[Depends(require_client_token)])
+def eulerpool_gov_treasury_yields(limit: int = Query(default=100)):
+    """US Treasury yield history."""
+    return _json_response(_get_eulerpool().government_treasury_yields(limit).to_dict(orient="records"))
+
+# ── Fixed Income ──────────────────────────────────────────────────────
+
+@app.get("/v1/eulerpool/fixed-income/analytics", dependencies=[Depends(require_client_token)])
+def eulerpool_fi_analytics():
+    """Fixed income analytics dashboard."""
+    return _json_response(_get_eulerpool().fixed_income_analytics())
+
+@app.get("/v1/eulerpool/fixed-income/curve/spot", dependencies=[Depends(require_client_token)])
+def eulerpool_fi_spot_curve(country: str = Query(default="US")):
+    """Government bond spot curve."""
+    return _json_response(_get_eulerpool().fixed_income_spot_curve(country).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/fixed-income/curve/forward", dependencies=[Depends(require_client_token)])
+def eulerpool_fi_forward_curve(country: str = Query(default="US"), term: str = Query(default="1y")):
+    """Government bond forward curve."""
+    return _json_response(_get_eulerpool().fixed_income_forward_curve(country, term).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/fixed-income/default-probabilities", dependencies=[Depends(require_client_token)])
+def eulerpool_fi_default_prob(recovery: float = Query(default=0.4)):
+    """Implied default probabilities from CDS."""
+    return _json_response(_get_eulerpool().fixed_income_default_probabilities(recovery).to_dict(orient="records"))
+# ── Singapore ──────────────────────────────────────────────────────────
+
+@app.get("/v1/eulerpool/singapore/acra", dependencies=[Depends(require_client_token)])
+def eulerpool_sg_acra(isin: str | None = Query(None), limit: int = Query(default=100)):
+    """Singapore ACRA corporate data."""
+    return _json_response(_get_eulerpool().singapore_acra(isin, limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/singapore/acra/{uen}", dependencies=[Depends(require_client_token)])
+def eulerpool_sg_acra_uen(uen: str):
+    """Singapore ACRA data by UEN."""
+    return _json_response(_get_eulerpool().singapore_acra_uen(uen))
+
+@app.get("/v1/eulerpool/singapore/announcements", dependencies=[Depends(require_client_token)])
+def eulerpool_sg_announcements(isin: str | None = Query(None), limit: int = Query(default=100)):
+    """Singapore corporate announcements."""
+    return _json_response(_get_eulerpool().singapore_announcements(isin, limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/singapore/corporate-actions", dependencies=[Depends(require_client_token)])
+def eulerpool_sg_corporate_actions(limit: int = Query(default=100)):
+    """Singapore corporate actions."""
+    return _json_response(_get_eulerpool().singapore_corporate_actions(limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/singapore/economic-stats", dependencies=[Depends(require_client_token)])
+def eulerpool_sg_economic_stats(limit: int = Query(default=100)):
+    """Singapore economic statistics."""
+    return _json_response(_get_eulerpool().singapore_economic_stats(limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/singapore/insider-trades", dependencies=[Depends(require_client_token)])
+def eulerpool_sg_insider_trades(limit: int = Query(default=100)):
+    """Singapore insider trading disclosures."""
+    return _json_response(_get_eulerpool().singapore_insider_trades(limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/singapore/mas/exchange-rates", dependencies=[Depends(require_client_token)])
+def eulerpool_sg_mas_exchange_rates(currency: str = Query(default="USD"), limit: int = Query(default=100)):
+    """MAS exchange rates."""
+    return _json_response(_get_eulerpool().singapore_mas_exchange_rates(currency, limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/singapore/mas/interest-rates", dependencies=[Depends(require_client_token)])
+def eulerpool_sg_mas_interest_rates(limit: int = Query(default=100)):
+    """MAS interest rates."""
+    return _json_response(_get_eulerpool().singapore_mas_interest_rates(limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/singapore/mas/money-supply", dependencies=[Depends(require_client_token)])
+def eulerpool_sg_mas_money_supply(limit: int = Query(default=100)):
+    """MAS money supply data."""
+    return _json_response(_get_eulerpool().singapore_mas_money_supply(limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/singapore/reits", dependencies=[Depends(require_client_token)])
+def eulerpool_sg_reits(isin: str | None = Query(None), limit: int = Query(default=100)):
+    """Singapore REITs data."""
+    return _json_response(_get_eulerpool().singapore_reits(isin, limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/singapore/reits/list", dependencies=[Depends(require_client_token)])
+def eulerpool_sg_reits_list():
+    """List all Singapore REITs."""
+    return _json_response(_get_eulerpool().singapore_reits_list().to_dict(orient="records"))
+
+# ── NFT ─────────────────────────────────────────────────────────────────
+
+@app.get("/v1/eulerpool/nft/collections", dependencies=[Depends(require_client_token)])
+def eulerpool_nft_collections(limit: int = Query(default=100), offset: int = Query(default=0)):
+    """List NFT collections."""
+    return _json_response(_get_eulerpool().nft_collections(limit, offset).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/nft/profile/{slug}", dependencies=[Depends(require_client_token)])
+def eulerpool_nft_profile(slug: str):
+    """NFT collection profile."""
+    return _json_response(_get_eulerpool().nft_collection_profile(slug))
+
+@app.get("/v1/eulerpool/nft/search", dependencies=[Depends(require_client_token)])
+def eulerpool_nft_search(query: str, limit: int = Query(default=100)):
+    """Search NFT collections."""
+    return _json_response(_get_eulerpool().nft_search(query, limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/nft/price-history/{slug}", dependencies=[Depends(require_client_token)])
+def eulerpool_nft_price_history(slug: str):
+    """NFT collection price history."""
+    return _json_response(_get_eulerpool().nft_price_history(slug).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/nft/markets", dependencies=[Depends(require_client_token)])
+def eulerpool_nft_markets(limit: int = Query(default=100)):
+    """NFT marketplace ranking."""
+    return _json_response(_get_eulerpool().nft_markets(limit).to_dict(orient="records"))
+# ── Analytics ──────────────────────────────────────────────────────────
+
+@app.get("/v1/eulerpool/analytics/cftc/tff", dependencies=[Depends(require_client_token)])
+def eulerpool_analytics_cftc_tff():
+    """CFTC TFF (Treasury Futures & Options) report."""
+    return _json_response(_get_eulerpool().analytics_cftc_tff().to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/analytics/cftc/tff/{exchange}", dependencies=[Depends(require_client_token)])
+def eulerpool_analytics_cftc_tff_exchange(exchange: str, days: int = Query(default=365)):
+    """CFTC TFF report for a specific exchange."""
+    return _json_response(_get_eulerpool().analytics_cftc_tff_exchange(exchange, days).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/analytics/corporate-events", dependencies=[Depends(require_client_token)])
+def eulerpool_analytics_corporate_events(days: int = Query(default=7), limit: int = Query(default=100)):
+    """Market-wide corporate events."""
+    return _json_response(_get_eulerpool().analytics_corporate_events(days, limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/analytics/fama-french", dependencies=[Depends(require_client_token)])
+def eulerpool_analytics_fama_french(start_date: str | None = Query(None), end_date: str | None = Query(None), days: int = Query(default=252)):
+    """Fama-French factor returns."""
+    return _json_response(_get_eulerpool().analytics_fama_french(start_date, end_date, days).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/analytics/options-volume", dependencies=[Depends(require_client_token)])
+def eulerpool_analytics_options_volume(days: int = Query(default=30)):
+    """Total options volume across the market."""
+    return _json_response(_get_eulerpool().analytics_options_volume(days).to_dict(orient="records"))
+
+# ── Charting ───────────────────────────────────────────────────────────
+
+@app.get("/v1/eulerpool/charting/ohlcv/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_charting_ohlcv(identifier: str, resolution: str = Query(default="D")):
+    """OHLCV time series for chart rendering."""
+    return _json_response(_get_eulerpool().charting_ohlcv(identifier, resolution).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/charting/indicators/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_charting_indicators(identifier: str, indicator: str = Query(default="sma"), period: int = Query(default=14), resolution: str = Query(default="D")):
+    """Technical indicator values for chart overlay."""
+    return _json_response(_get_eulerpool().charting_indicators(identifier, indicator, period, resolution).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/charting/patterns/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_charting_patterns(identifier: str, resolution: str = Query(default="D")):
+    """Chart pattern recognition results."""
+    return _json_response(_get_eulerpool().charting_patterns(identifier, resolution).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/charting/overlay/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_charting_overlay(identifier: str, overlay_type: str = Query(default="fibonacci"), pivot_method: str = Query(default="standard"), resolution: str = Query(default="D")):
+    """Chart overlay data (fibonacci, trends)."""
+    return _json_response(_get_eulerpool().charting_overlay(identifier, overlay_type, pivot_method, resolution))
+
+@app.get("/v1/eulerpool/charting/compare", dependencies=[Depends(require_client_token)])
+def eulerpool_charting_compare(symbols: str, normalize: bool = Query(default=False)):
+    """Compare multiple symbols on normalized chart."""
+    return _json_response(_get_eulerpool().charting_compare(symbols.split(","), normalize).to_dict(orient="records"))
+
+# ── Risk Models ────────────────────────────────────────────────────────
+
+@app.get("/v1/eulerpool/risk/covariance", dependencies=[Depends(require_client_token)])
+def eulerpool_risk_covariance():
+    """Risk model covariance matrix."""
+    return _json_response(_get_eulerpool().risk_covariance())
+
+@app.get("/v1/eulerpool/risk/exposure/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_risk_exposure(identifier: str):
+    """Risk model factor exposure for a security."""
+    return _json_response(_get_eulerpool().risk_exposure(identifier))
+
+@app.get("/v1/eulerpool/risk/factor-returns", dependencies=[Depends(require_client_token)])
+def eulerpool_risk_factor_returns(from_date: str | None = Query(None), to_date: str | None = Query(None), frequency: str = Query(default="D")):
+    """Risk model factor return time series."""
+    return _json_response(_get_eulerpool().risk_factor_returns(from_date, to_date, frequency).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/risk/factors", dependencies=[Depends(require_client_token)])
+def eulerpool_risk_factors():
+    """List of all risk model factors."""
+    return _json_response(_get_eulerpool().risk_factors().to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/risk/portfolio-risk", dependencies=[Depends(require_client_token)])
+def eulerpool_risk_portfolio_risk():
+    """Aggregate portfolio risk decomposition."""
+    return _json_response(_get_eulerpool().risk_portfolio_risk())
+# ── Market Extended ──────────────────────────────────────────────────
+
+@app.get("/v1/eulerpool/market/52week/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_market_52week(identifier: str):
+    """52-week price analytics."""
+    return _json_response(_get_eulerpool().market_52week(identifier))
+
+@app.get("/v1/eulerpool/market/fx-returns/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_market_fx_returns(identifier: str):
+    """Currency-adjusted returns."""
+    return _json_response(_get_eulerpool().market_fx_returns(identifier))
+
+@app.get("/v1/eulerpool/market/multi-exchange/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_market_multi_exchange(identifier: str):
+    """Quotes from multiple exchanges."""
+    return _json_response(_get_eulerpool().market_multi_exchange(identifier).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/market/bulk-quotes", dependencies=[Depends(require_client_token)])
+def eulerpool_market_bulk_quotes(identifiers: str):
+    """Bulk quotes for many identifiers."""
+    return _json_response(_get_eulerpool().market_bulk_quotes(identifiers).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/market/dark-pool/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_market_dark_pool(identifier: str, days: int = Query(default=30)):
+    """Dark pool trading volume."""
+    return _json_response(_get_eulerpool().market_dark_pool(identifier, days).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/market/level2/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_market_level2(identifier: str):
+    """Level 2 order book snapshot."""
+    return _json_response(_get_eulerpool().market_level2(identifier))
+
+@app.get("/v1/eulerpool/market/last-trade/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_market_last_trade(identifier: str):
+    """Last trade for a security."""
+    return _json_response(_get_eulerpool().market_last_trade(identifier))
+
+@app.get("/v1/eulerpool/market/last-quote/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_market_last_quote(identifier: str):
+    """Last quote for a security."""
+    return _json_response(_get_eulerpool().market_last_quote(identifier))
+
+@app.get("/v1/eulerpool/market/precomputed-risk/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_market_precomputed_risk(identifier: str):
+    """Precomputed risk metrics (beta, vol, Sharpe)."""
+    return _json_response(_get_eulerpool().market_precomputed_risk(identifier))
+
+@app.get("/v1/eulerpool/market/unusual-moves", dependencies=[Depends(require_client_token)])
+def eulerpool_market_unusual_moves(days: int = Query(default=5), limit: int = Query(default=50)):
+    """Unusual price moves detected across the market."""
+    return _json_response(_get_eulerpool().market_unusual_moves(days, limit).to_dict(orient="records"))
+
+# ── Sentiment Extended ──────────────────────────────────────────────
+
+@app.get("/v1/eulerpool/sentiment/price-metrics/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_sentiment_price_metrics(identifier: str):
+    """Price-derived sentiment metrics."""
+    return _json_response(_get_eulerpool().sentiment_price_metrics(identifier))
+
+@app.get("/v1/eulerpool/sentiment/sector-metrics", dependencies=[Depends(require_client_token)])
+def eulerpool_sentiment_sector_metrics():
+    """Sector-level sentiment metrics."""
+    return _json_response(_get_eulerpool().sentiment_sector_metrics().to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/sentiment/social-feed/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_sentiment_social_feed(identifier: str):
+    """Raw social media feed for a security."""
+    return _json_response(_get_eulerpool().sentiment_social_feed(identifier).to_dict(orient="records"))
+
+# ── Alternative Extended ────────────────────────────────────────────
+
+@app.get("/v1/eulerpool/alternative/cot/{product}", dependencies=[Depends(require_client_token)])
+def eulerpool_alternative_cot(product: str = "CRUDE", limit: int = Query(default=10)):
+    """CFTC Commitment of Traders report."""
+    return _json_response(_get_eulerpool().alternative_cot(product, limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/alternative/datasets", dependencies=[Depends(require_client_token)])
+def eulerpool_alternative_datasets():
+    """List available alternative datasets."""
+    return _json_response(_get_eulerpool().alternative_datasets().to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/alternative/datasets/{dataset_id}", dependencies=[Depends(require_client_token)])
+def eulerpool_alternative_dataset(dataset_id: str, ticker: str, days: int = Query(default=365)):
+    """Time series from an alternative dataset."""
+    return _json_response(_get_eulerpool().alternative_dataset(dataset_id, ticker, days).to_dict(orient="records"))
+# ── Screener Extended ────────────────────────────────────────────────
+
+@app.get("/v1/eulerpool/screener/universe", dependencies=[Depends(require_client_token)])
+def eulerpool_screener_universe():
+    """Available screener universes."""
+    return _json_response(_get_eulerpool().screener_universe().to_dict(orient="records"))
+
+# ── Vendor Warehouse ─────────────────────────────────────────────────
+
+@app.get("/v1/eulerpool/vendor/catalog", dependencies=[Depends(require_client_token)])
+def eulerpool_vendor_catalog():
+    """Vendor warehouse catalog with latest as-of dates."""
+    return _json_response(_get_eulerpool().vendor_catalog().to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/vendor/{vendor}/{dataset}", dependencies=[Depends(require_client_token)])
+def eulerpool_vendor_dataset(vendor: str, dataset: str, as_of: str | None = Query(None)):
+    """Latest market-wide snapshot for a vendor dataset."""
+    return _json_response(_get_eulerpool().vendor_dataset(vendor, dataset, as_of).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/vendor/{vendor}/{dataset}/{key}", dependencies=[Depends(require_client_token)])
+def eulerpool_vendor_dataset_key(vendor: str, dataset: str, key: str, as_of: str | None = Query(None)):
+    """Vendor dataset snapshot for one key."""
+    return _json_response(_get_eulerpool().vendor_dataset_key(vendor, dataset, key, as_of))
+
+# ── FMP ───────────────────────────────────────────────────────────────
+
+@app.get("/v1/eulerpool/fmp/catalog", dependencies=[Depends(require_client_token)])
+def eulerpool_fmp_catalog():
+    """FMP dataset catalog."""
+    return _json_response(_get_eulerpool().fmp_catalog().to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/fmp/dcf/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_fmp_dcf(identifier: str):
+    """Discounted cash flow valuation."""
+    return _json_response(_get_eulerpool().fmp_dcf(identifier))
+
+@app.get("/v1/eulerpool/fmp/key-metrics/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_fmp_key_metrics(identifier: str):
+    """Key metrics (TTM)."""
+    return _json_response(_get_eulerpool().fmp_key_metrics(identifier))
+
+@app.get("/v1/eulerpool/fmp/ratios/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_fmp_ratios(identifier: str):
+    """Financial ratios (TTM)."""
+    return _json_response(_get_eulerpool().fmp_ratios(identifier))
+
+@app.get("/v1/eulerpool/fmp/eod/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_fmp_eod(identifier: str):
+    """Latest end-of-day OHLCV snapshot."""
+    return _json_response(_get_eulerpool().fmp_eod(identifier))
+
+@app.get("/v1/eulerpool/fmp/scores/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_fmp_scores(identifier: str):
+    """Altman Z-score, Piotroski score."""
+    return _json_response(_get_eulerpool().fmp_scores(identifier))
+
+@app.get("/v1/eulerpool/fmp/rating/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_fmp_rating(identifier: str):
+    """Composite rating with per-factor scores."""
+    return _json_response(_get_eulerpool().fmp_rating(identifier))
+
+@app.get("/v1/eulerpool/fmp/dataset/{dataset}", dependencies=[Depends(require_client_token)])
+def eulerpool_fmp_dataset(dataset: str, limit: int = Query(default=100), offset: int = Query(default=0), as_of: str | None = Query(None)):
+    """Market-wide FMP dataset snapshot."""
+    return _json_response(_get_eulerpool().fmp_dataset(dataset, limit, offset, as_of).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/fmp/company/{dataset}/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_fmp_company_dataset(dataset: str, identifier: str, as_of: str | None = Query(None)):
+    """FMP dataset snapshot for one security."""
+    return _json_response(_get_eulerpool().fmp_company_dataset(dataset, identifier, as_of))
+
+@app.get("/v1/eulerpool/fmp/gainers", dependencies=[Depends(require_client_token)])
+def eulerpool_fmp_gainers(limit: int = Query(default=10)):
+    """Top gainers."""
+    return _json_response(_get_eulerpool().fmp_gainers(limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/fmp/losers", dependencies=[Depends(require_client_token)])
+def eulerpool_fmp_losers(limit: int = Query(default=10)):
+    """Top losers."""
+    return _json_response(_get_eulerpool().fmp_losers(limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/fmp/most-active", dependencies=[Depends(require_client_token)])
+def eulerpool_fmp_most_active(limit: int = Query(default=10)):
+    """Most active stocks by volume."""
+    return _json_response(_get_eulerpool().fmp_most_active(limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/fmp/news", dependencies=[Depends(require_client_token)])
+def eulerpool_fmp_news(limit: int = Query(default=10)):
+    """Market news feed."""
+    return _json_response(_get_eulerpool().fmp_news(limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/fmp/sector-pe", dependencies=[Depends(require_client_token)])
+def eulerpool_fmp_sector_pe(exchange: str = Query(default="NASDAQ")):
+    """Sector PE snapshots."""
+    return _json_response(_get_eulerpool().fmp_sector_pe(exchange).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/fmp/industry-pe", dependencies=[Depends(require_client_token)])
+def eulerpool_fmp_industry_pe(exchange: str = Query(default="NASDAQ")):
+    """Industry PE snapshots."""
+    return _json_response(_get_eulerpool().fmp_industry_pe(exchange).to_dict(orient="records"))
+# ── Funds (N-PORT / Form D) ────────────────────────────────────────────
+
+@app.get("/v1/eulerpool/funds/nport", dependencies=[Depends(require_client_token)])
+def eulerpool_funds_nport(cik: int | None = Query(None), cusip: str | None = Query(None), isin: str | None = Query(None), limit: int = Query(default=500)):
+    """SEC Form N-PORT fund holdings."""
+    return _json_response(_get_eulerpool().funds_nport(cik, cusip, isin, limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/funds/nport/{cik}", dependencies=[Depends(require_client_token)])
+def eulerpool_funds_nport_by_cik(cik: int, limit: int = Query(default=2000)):
+    """N-PORT holdings by fund CIK."""
+    return _json_response(_get_eulerpool().funds_nport_by_cik(cik, limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/funds/form-d", dependencies=[Depends(require_client_token)])
+def eulerpool_funds_form_d(cik: int | None = Query(None), state: str | None = Query(None), is_fund: bool | None = Query(None), limit: int = Query(default=500)):
+    """SEC Form D exempt offerings."""
+    return _json_response(_get_eulerpool().funds_form_d(cik, state, is_fund, limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/funds/form-d/{cik}", dependencies=[Depends(require_client_token)])
+def eulerpool_funds_form_d_by_cik(cik: int):
+    """Form D filings by issuer CIK."""
+    return _json_response(_get_eulerpool().funds_form_d_by_cik(cik).to_dict(orient="records"))
+
+# ── Equity Extended II ─────────────────────────────────────────────────
+
+@app.get("/v1/eulerpool/equity/price-change/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_price_change(identifier: str):
+    """Total return over standard windows (1D-max)."""
+    return _json_response(_get_eulerpool().price_change(identifier))
+
+@app.get("/v1/eulerpool/equity/grade-news", dependencies=[Depends(require_client_token)])
+def eulerpool_grade_news(limit: int = Query(default=100)):
+    """Latest analyst upgrade/downgrade news market-wide."""
+    return _json_response(_get_eulerpool().grade_news(limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/equity/price-target-news/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_price_target_news(identifier: str):
+    """Recent price-target changes for a security."""
+    return _json_response(_get_eulerpool().price_target_news(identifier).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/equity/price-target-news-latest", dependencies=[Depends(require_client_token)])
+def eulerpool_price_target_news_latest(limit: int = Query(default=100)):
+    """Latest price-target changes market-wide."""
+    return _json_response(_get_eulerpool().price_target_news_latest(limit).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/equity/market-multiples/{multiple_type}", dependencies=[Depends(require_client_token)])
+def eulerpool_market_multiples(multiple_type: str = "pe"):
+    """Market-wide valuation multiple time series (pe, pb, ps, pc, liab)."""
+    return _json_response(_get_eulerpool().market_multiples(multiple_type).to_dict(orient="records"))
+
+@app.get("/v1/eulerpool/equity/relative-move/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_relative_move(identifier: str):
+    """Today's price move relative to its exchange/benchmark."""
+    return _json_response(_get_eulerpool().relative_move(identifier))
+
+@app.get("/v1/eulerpool/equity/vendor-ratings/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_vendor_ratings(identifier: str):
+    """Third-party analyst rating scores including European coverage."""
+    return _json_response(_get_eulerpool().vendor_ratings(identifier))
+
+@app.get("/v1/eulerpool/news/feed.xml", dependencies=[Depends(require_client_token)])
+def eulerpool_news_feed_xml(language: str | None = Query(None), type_: str | None = Query(None)):
+    """RSS Feed XML stream of all news."""
+    return Response(_get_eulerpool().news_feed_xml(language, type_), media_type="application/xml")
+
+@app.get("/v1/eulerpool/partner/alleaktien/fundamentals", dependencies=[Depends(require_client_token)])
+def eulerpool_partner_alleaktien(isins: str):
+    """Batch fundamental metrics from AlleAktien by ISINs."""
+    return _json_response(_get_eulerpool().partner_alleaktien(isins.split(",")).to_dict(orient="records"))
     return _json_response(_get_eulerpool().ticker_trends(symbol))

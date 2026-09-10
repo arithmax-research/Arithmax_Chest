@@ -511,7 +511,15 @@ class EulerpoolProvider:
 
     def etf_exposure(self, identifier: str) -> pd.DataFrame:
         """Every ETF that holds this stock with weight percentage."""
-# ── Sentiment ────────────────────────────────────────────────────────
+        data = self._get(f"/equity/etf-exposure/{identifier}")
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def etf_list(self, start: int = 0, limit: int = 10) -> pd.DataFrame:
+        """Paginated list of all ETF ISINs available."""
+        data = self._get(f"/etf/list/{start}/{limit}")
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    # ── Sentiment ────────────────────────────────────────────────────────
 
     def insider_sentiment(self, identifier: str) -> pd.DataFrame:
         """Monthly MSPR (monthly share purchase ratio) -- -100 to +100."""
@@ -1208,14 +1216,64 @@ class EulerpoolProvider:
         """Top pools on a specific blockchain network."""
         data = self._get(f"/dex/pools/{network}")
         return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
-        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
     def swot_analysis(self, identifier: str, language: str = "en") -> dict:
         """AI-generated SWOT analysis (Strengths, Weaknesses, ...)."""
         return self._get(f"/equity/swot/{identifier}", language=language)
-        data = self._get(f"/equity/etf-exposure/{identifier}")
-        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def sec_fail_to_deliver(self, ticker: str, days: int = 90) -> pd.DataFrame:
         """SEC fail-to-deliver data."""
         data = self._get(f"/equity/sec-ftd/{ticker}", days=days)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+# ═══════════════════════════════════════════════════════════════════════
+    #  SHIPPING  (vessels, positions, voyages, cargoes, ports)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def shipping_vessels(
+        self,
+        vessel_type: str | None = None,
+        vessel_class: str | None = None,
+        flag: str | None = None,
+        search: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> pd.DataFrame:
+        """Search global tanker/LNG/LPG vessel registry."""
+        data = self._get("/shipping/vessels", vessel_type=vessel_type, vessel_class=vessel_class, flag=flag, search=search, limit=limit, offset=offset)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def shipping_vessel(self, imo: int) -> dict:
+        """Get vessel details by IMO number including current position."""
+        return self._get(f"/shipping/vessels/{imo}")
+
+    def shipping_vessel_track(self, imo: int, days: int = 7, limit: int = 1000) -> pd.DataFrame:
+        """Historical AIS positions for a vessel."""
+        data = self._get(f"/shipping/vessels/{imo}/track", days=days, limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def shipping_positions(self, bbox: str | None = None, vessel_type: str | None = None, min_speed: float | None = None) -> pd.DataFrame:
+        """All current vessel positions within a bounding box."""
+        data = self._get("/shipping/positions", bbox=bbox, vessel_type=vessel_type, min_speed=min_speed)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def shipping_voyages(self, status: str | None = None, cargo_type: str | None = None, imo: int | None = None, origin_port: int | None = None, destination_port: int | None = None, limit: int = 100, offset: int = 0) -> pd.DataFrame:
+        """List active and recent voyages with filtering."""
+        data = self._get("/shipping/voyages", status=status, cargo_type=cargo_type, imo=imo, origin_port=origin_port, destination_port=destination_port, limit=limit, offset=offset)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def shipping_cargoes(self, product: str | None = None, origin_country: str | None = None, destination_country: str | None = None, start_date: str | None = None, end_date: str | None = None, limit: int = 100, offset: int = 0) -> pd.DataFrame:
+        """Track cargo movements by product, origin, destination, and date."""
+        data = self._get("/shipping/cargoes", product=product, origin_country=origin_country, destination_country=destination_country, start_date=start_date, end_date=end_date, limit=limit, offset=offset)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def shipping_ports(self, country_code: str | None = None, port_type: str | None = None, search: str | None = None, limit: int = 100) -> pd.DataFrame:
+        """List global oil/LNG ports and terminals."""
+        data = self._get("/shipping/ports", country_code=country_code, port_type=port_type, search=search, limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def shipping_port_activity(self, port_id: int, days: int = 30, limit: int = 100) -> pd.DataFrame:
+        """Recent voyages arriving at or departing from a port (e.g. Port of LA)."""
+        data = self._get(f"/shipping/ports/{port_id}/activity", days=days, limit=limit)
         return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
 
     @staticmethod
@@ -1228,3 +1286,516 @@ class EulerpoolProvider:
         if isinstance(value, (int, float)):
             return EulerpoolProvider._ts_ms(int(value))
         return None
+# ═══════════════════════════════════════════════════════════════════════
+    #  ENERGY  (pipelines, storage, natural gas, petroleum, coal, JODI)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def energy_pipelines(self, commodity: str | None = None, country: str | None = None, status: str | None = None, limit: int = 200) -> pd.DataFrame:
+        """List global oil and gas pipelines with GeoJSON routes."""
+        data = self._get("/energy/pipelines/", commodity=commodity, country=country, status=status, limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def energy_pipeline(self, pipeline_id: int) -> dict:
+        """Get pipeline details including latest flow reading."""
+        return self._get(f"/energy/pipelines/{pipeline_id}")
+
+    def energy_pipeline_flows(self, pipeline_id: int, start_date: str | None = None, end_date: str | None = None, limit: int = 500) -> pd.DataFrame:
+        """Historical flow time-series for a pipeline."""
+        data = self._get(f"/energy/pipelines/{pipeline_id}/flows", start_date=start_date, end_date=end_date, limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def energy_latest(self) -> dict:
+        """Latest energy data snapshot (US, EU, global)."""
+        return self._get("/energy/energy/latest")
+
+    def energy_natural_gas(self, start_date: str | None = None, end_date: str | None = None, limit: int = 100) -> pd.DataFrame:
+        """Weekly natural gas storage and production data (EIA)."""
+        data = self._get("/energy/natural-gas/weekly", start_date=start_date, end_date=end_date, limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def energy_petroleum(self, start_date: str | None = None, end_date: str | None = None, limit: int = 100) -> pd.DataFrame:
+        """Weekly petroleum status report (EIA)."""
+        data = self._get("/energy/petroleum/weekly", start_date=start_date, end_date=end_date, limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def energy_coal(self, start_date: str | None = None, end_date: str | None = None, limit: int = 100) -> pd.DataFrame:
+        """Quarterly coal data."""
+        data = self._get("/energy/coal/quarterly", start_date=start_date, end_date=end_date, limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def energy_electricity(self, start_date: str | None = None, end_date: str | None = None, limit: int = 100) -> pd.DataFrame:
+        """Monthly electricity data."""
+        data = self._get("/energy/electricity/monthly", start_date=start_date, end_date=end_date, limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def energy_jodi(self, commodity: str = "oil", country_code: str | None = None, limit: int = 100) -> pd.DataFrame:
+        """JODI oil & gas flows data."""
+        data = self._get("/energy/jodi", commodity=commodity, country_code=country_code, limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def energy_storage(self, limit: int = 100) -> pd.DataFrame:
+        """List storage facilities."""
+        data = self._get("/energy/storage/facilities", limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def energy_storage_levels(self, facility_id: int, start_date: str | None = None, end_date: str | None = None, limit: int = 100) -> pd.DataFrame:
+        """Historical storage levels for a facility."""
+        data = self._get(f"/energy/storage/facilities/{facility_id}/levels", start_date=start_date, end_date=end_date, limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def energy_storage_summary(self) -> dict:
+        """Storage summary across all facilities."""
+        return self._get("/energy/storage/summary")
+# ═══════════════════════════════════════════════════════════════════════
+    #  GOVERNMENT  (treasury auctions, debt, yields)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def government_treasury_auctions(self, limit: int = 100) -> pd.DataFrame:
+        """US Treasury auction results."""
+        data = self._get("/government/treasury/auctions", limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def government_treasury_debt(self, limit: int = 100) -> pd.DataFrame:
+        """US Treasury debt outstanding."""
+        data = self._get("/government/treasury/debt", limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def government_treasury_yields(self, limit: int = 100) -> pd.DataFrame:
+        """US Treasury yield history."""
+        data = self._get("/government/treasury/yields", limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    # ═══════════════════════════════════════════════════════════════════════
+    #  FIXED INCOME  (spot curve, forward curve, analytics, default prob)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def fixed_income_analytics(self) -> dict:
+        """Fixed income analytics dashboard."""
+        return self._get("/fixed-income/analytics")
+
+    def fixed_income_spot_curve(self, country: str = "US") -> pd.DataFrame:
+        """Government bond spot curve."""
+        data = self._get("/fixed-income/curve/spot", country=country)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def fixed_income_forward_curve(self, country: str = "US", term: str = "1y") -> pd.DataFrame:
+        """Government bond forward curve."""
+        data = self._get("/fixed-income/curve/forward", country=country, term=term)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def fixed_income_default_probabilities(self, recovery: float = 0.4) -> pd.DataFrame:
+        """Implied default probabilities from CDS spreads."""
+        data = self._get("/fixed-income/default-probabilities", recovery=recovery)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+# ═══════════════════════════════════════════════════════════════════════
+    #  SINGAPORE  (ACRA, MAS, REITs, economic stats, corporate actions)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def singapore_acra(self, isin: str | None = None, limit: int = 100) -> pd.DataFrame:
+        """Singapore ACRA (Accounting & Corporate Regulatory Authority) data."""
+        data = self._get("/singapore/acra", isin=isin, limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def singapore_acra_uen(self, uen: str) -> dict:
+        """Singapore ACRA data by UEN."""
+        return self._get(f"/singapore/acra/{uen}")
+
+    def singapore_announcements(self, isin: str | None = None, limit: int = 100) -> pd.DataFrame:
+        """Singapore corporate announcements."""
+        data = self._get("/singapore/announcements", isin=isin, limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def singapore_corporate_actions(self, limit: int = 100) -> pd.DataFrame:
+        """Singapore corporate actions."""
+        data = self._get("/singapore/corporate-actions", limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def singapore_economic_stats(self, limit: int = 100) -> pd.DataFrame:
+        """Singapore economic statistics."""
+        data = self._get("/singapore/economic-stats", limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def singapore_insider_trades(self, limit: int = 100) -> pd.DataFrame:
+        """Singapore insider trading disclosures."""
+        data = self._get("/singapore/insider-trades", limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def singapore_mas_exchange_rates(self, currency: str = "USD", limit: int = 100) -> pd.DataFrame:
+        """MAS (Monetary Authority of Singapore) exchange rates."""
+        data = self._get("/singapore/mas/exchange-rates", currency=currency, limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def singapore_mas_interest_rates(self, limit: int = 100) -> pd.DataFrame:
+        """MAS interest rates."""
+        data = self._get("/singapore/mas/interest-rates", limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def singapore_mas_money_supply(self, limit: int = 100) -> pd.DataFrame:
+        """MAS money supply data."""
+        data = self._get("/singapore/mas/money-supply", limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def singapore_reits(self, isin: str | None = None, limit: int = 100) -> pd.DataFrame:
+        """Singapore REITs data."""
+        data = self._get("/singapore/reits", isin=isin, limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def singapore_reits_list(self) -> pd.DataFrame:
+        """List of all Singapore REITs."""
+        data = self._get("/singapore/reits/list")
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    # ═══════════════════════════════════════════════════════════════════════
+    #  NFT  (collections, profile, search, price history, markets)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def nft_collections(self, limit: int = 100, offset: int = 0) -> pd.DataFrame:
+        """List NFT collections."""
+        data = self._get("/nft/list", limit=limit, offset=offset)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def nft_collection_profile(self, slug: str) -> dict:
+        """NFT collection profile."""
+        return self._get(f"/nft/profile/{slug}")
+
+    def nft_search(self, query: str, limit: int = 100) -> pd.DataFrame:
+        """Search NFT collections."""
+        data = self._get("/nft/search", q=query, limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def nft_price_history(self, slug: str) -> pd.DataFrame:
+        """NFT collection price history."""
+        data = self._get(f"/nft/price-history/{slug}")
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def nft_markets(self, limit: int = 100) -> pd.DataFrame:
+        """NFT marketplace ranking."""
+        data = self._get("/nft/markets", limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+# ═══════════════════════════════════════════════════════════════════════
+    #  ANALYTICS  (CFTC TFF, corporate events, Fama-French, options volume)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def analytics_cftc_tff(self) -> pd.DataFrame:
+        """CFTC TFF (Treasury Futures & Options) report."""
+        data = self._get("/analytics/cftc/tff")
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def analytics_cftc_tff_exchange(self, exchange: str = "CME", days: int = 365) -> pd.DataFrame:
+        """CFTC TFF report for a specific exchange."""
+        data = self._get(f"/analytics/cftc/tff/{exchange}", days=days)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def analytics_corporate_events(self, days: int = 7, limit: int = 100) -> pd.DataFrame:
+        """Market-wide corporate events."""
+        data = self._get("/analytics/corporate-events", days=days, limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def analytics_fama_french(self, start_date: str | None = None, end_date: str | None = None, days: int = 252) -> pd.DataFrame:
+        """Fama-French factor returns."""
+        data = self._get("/analytics/fama-french", start_date=start_date, end_date=end_date, days=days)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def analytics_options_volume(self, days: int = 30) -> pd.DataFrame:
+        """Total options volume across the market."""
+        data = self._get("/analytics/options-volume", days=days)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    # ═══════════════════════════════════════════════════════════════════════
+    #  CHARTING  (OHLCV, indicators, patterns, overlays, compare)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def charting_ohlcv(self, identifier: str, resolution: str = "D") -> pd.DataFrame:
+        """OHLCV time series for chart rendering."""
+        data = self._get(f"/charting/ohlcv/{identifier}", resolution=resolution)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def charting_indicators(self, identifier: str, indicator: str = "sma", period: int = 14, resolution: str = "D") -> pd.DataFrame:
+        """Technical indicator values for chart overlay."""
+        data = self._get(f"/charting/indicators/{identifier}", indicator=indicator, period=period, resolution=resolution)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def charting_patterns(self, identifier: str, resolution: str = "D") -> pd.DataFrame:
+        """Chart pattern recognition results."""
+        data = self._get(f"/charting/patterns/{identifier}", resolution=resolution)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def charting_overlay(self, identifier: str, overlay_type: str = "fibonacci", pivot_method: str = "standard", resolution: str = "D") -> dict:
+        """Chart overlay data (fibonacci, trends, etc.)."""
+        return self._get(f"/charting/overlay/{identifier}", type=overlay_type, pivot_method=pivot_method, resolution=resolution)
+
+    def charting_compare(self, symbols: list[str], normalize: bool = False) -> pd.DataFrame:
+        """Compare multiple symbols on a normalized chart."""
+        data = self._get("/charting/compare", symbols=",".join(symbols), normalize=str(normalize).lower())
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+# ═══════════════════════════════════════════════════════════════════════
+    #  RISK MODELS  (covariance, exposure, factor returns, factors)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def risk_covariance(self) -> dict:
+        """Risk model covariance matrix."""
+        return self._get("/risk-models/covariance")
+
+    def risk_exposure(self, identifier: str) -> dict:
+        """Risk model factor exposure for a security."""
+        return self._get(f"/risk-models/exposure/{identifier}")
+
+    def risk_factor_returns(self, from_date: str | None = None, to_date: str | None = None, frequency: str = "D") -> pd.DataFrame:
+        """Risk model factor return time series."""
+        data = self._get("/risk-models/factor-returns", from_date=from_date, to_date=to_date, frequency=frequency)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def risk_factors(self) -> pd.DataFrame:
+        """List of all risk model factors."""
+        data = self._get("/risk-models/factors")
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def risk_portfolio_risk(self) -> dict:
+        """Aggregate portfolio risk decomposition."""
+        return self._get("/risk-models/portfolio-risk")
+
+    # ═══════════════════════════════════════════════════════════════════════
+    #  MARKET EXTENDED  (52-week, multi-exchange, dark pool, L2, bulk)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def market_52week(self, identifier: str) -> dict:
+        """52-week price analytics (high, low, change, percentile)."""
+        return self._get(f"/market/analytics/52week/{identifier}")
+
+    def market_fx_returns(self, identifier: str) -> dict:
+        """Currency-adjusted returns."""
+        return self._get(f"/market/analytics/fx-returns/{identifier}")
+
+    def market_multi_exchange(self, identifier: str) -> pd.DataFrame:
+        """Quotes from multiple exchanges."""
+        data = self._get(f"/market/multi-exchange/{identifier}")
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def market_bulk_quotes(self, identifiers: str) -> pd.DataFrame:
+        """Bulk quotes for many identifiers."""
+        data = self._get("/market/bulk", identifiers=identifiers)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def market_dark_pool(self, identifier: str, days: int = 30) -> pd.DataFrame:
+        """Dark pool trading volume."""
+        data = self._get(f"/market/darkpool/{identifier}", days=days)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def market_level2(self, identifier: str) -> dict:
+        """Level 2 order book snapshot."""
+        return self._get(f"/market/l2/{identifier}")
+
+    def market_last_trade(self, identifier: str) -> dict:
+        """Last trade for a security."""
+        return self._get(f"/market/last-trade/{identifier}")
+
+    def market_last_quote(self, identifier: str) -> dict:
+        """Last quote for a security."""
+        return self._get(f"/market/last-quote/{identifier}")
+
+    def market_precomputed_risk(self, identifier: str) -> dict:
+        """Precomputed risk metrics (beta, vol, Sharpe, etc.)."""
+        return self._get(f"/market/risk/{identifier}")
+
+    def market_unusual_moves(self, days: int = 5, limit: int = 50) -> pd.DataFrame:
+        """Unusual price moves detected across the market."""
+# ═══════════════════════════════════════════════════════════════════════
+    #  SENTIMENT EXTENDED  (price-metrics, sector-metrics, social feed)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def sentiment_price_metrics(self, identifier: str) -> dict:
+        """Price-derived sentiment metrics."""
+        return self._get(f"/sentiment/price-metrics/{identifier}")
+
+    def sentiment_sector_metrics(self) -> pd.DataFrame:
+        """Sector-level sentiment metrics."""
+        data = self._get("/sentiment/sector-metrics")
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def sentiment_social_feed(self, identifier: str) -> pd.DataFrame:
+        """Raw social media feed for a security."""
+        data = self._get(f"/sentiment/social/{identifier}")
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    # ═══════════════════════════════════════════════════════════════════════
+    #  ALTERNATIVE EXTENDED  (COT, datasets)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def alternative_cot(self, product: str = "CRUDE", limit: int = 10) -> pd.DataFrame:
+        """CFTC Commitment of Traders report."""
+        data = self._get(f"/alternative/cot/{product}", limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def alternative_datasets(self) -> pd.DataFrame:
+        """List available alternative datasets."""
+        data = self._get("/alternative/datasets")
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def alternative_dataset(self, dataset_id: str, ticker: str, days: int = 365) -> pd.DataFrame:
+        """Time series data from an alternative dataset."""
+        data = self._get(f"/alternative/datasets/{dataset_id}", ticker=ticker, days=days)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    # ═══════════════════════════════════════════════════════════════════════
+    #  SCREENER EXTENDED / VENDOR WAREHOUSE
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def screener_universe(self) -> pd.DataFrame:
+        """Available screener universes."""
+        data = self._get("/screener/universe")
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def vendor_catalog(self) -> pd.DataFrame:
+        """Every dataset in the vendor warehouse."""
+        data = self._get("/vendor/catalog")
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def vendor_dataset(self, vendor: str, dataset: str, as_of: str | None = None) -> pd.DataFrame:
+        """Latest market-wide snapshot for a vendor dataset."""
+        data = self._get(f"/vendor/{vendor}/{dataset}", as_of=as_of)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def vendor_dataset_key(self, vendor: str, dataset: str, key: str, as_of: str | None = None) -> dict:
+        """Latest snapshot for one key inside a vendor dataset."""
+        return self._get(f"/vendor/{vendor}/{dataset}/{key}", as_of=as_of)
+        data = self._get("/market/unusual-moves", days=days, limit=limit)
+# ═══════════════════════════════════════════════════════════════════════
+    #  FMP  (dcf, key-metrics, ratios, eod, scores, rating, gainers, news)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def fmp_catalog(self) -> pd.DataFrame:
+        """FMP dataset catalog with slugs."""
+        data = self._get("/fmp/catalog")
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def fmp_dcf(self, identifier: str) -> dict:
+        """Discounted cash flow valuation."""
+        return self._get(f"/fmp/dcf/{identifier}")
+
+    def fmp_key_metrics(self, identifier: str) -> dict:
+        """Key metrics (TTM)."""
+        return self._get(f"/fmp/key-metrics/{identifier}")
+
+    def fmp_ratios(self, identifier: str) -> dict:
+        """Financial ratios (TTM)."""
+        return self._get(f"/fmp/ratios/{identifier}")
+
+    def fmp_eod(self, identifier: str) -> dict:
+        """Latest end-of-day OHLCV snapshot."""
+        return self._get(f"/fmp/eod/{identifier}")
+
+    def fmp_scores(self, identifier: str) -> dict:
+        """Altman Z-score, Piotroski score, financial health."""
+        return self._get(f"/fmp/scores/{identifier}")
+
+    def fmp_rating(self, identifier: str) -> dict:
+        """Composite rating with per-factor scores."""
+        return self._get(f"/fmp/rating/{identifier}")
+
+    def fmp_dataset(self, dataset: str, limit: int = 100, offset: int = 0, as_of: str | None = None) -> pd.DataFrame:
+        """Market-wide FMP dataset snapshot."""
+        data = self._get(f"/fmp/{dataset}", limit=limit, offset=offset, as_of=as_of)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def fmp_company_dataset(self, dataset: str, identifier: str, as_of: str | None = None) -> dict:
+        """FMP dataset snapshot for one security."""
+        return self._get(f"/fmp/{dataset}/{identifier}", as_of=as_of)
+
+    def fmp_gainers(self, limit: int = 10) -> pd.DataFrame:
+        """Top gainers."""
+        data = self._get("/fmp/gainers", limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def fmp_losers(self, limit: int = 10) -> pd.DataFrame:
+        """Top losers."""
+        data = self._get("/fmp/losers", limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def fmp_most_active(self, limit: int = 10) -> pd.DataFrame:
+        """Most active stocks by volume."""
+        data = self._get("/fmp/most-active", limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def fmp_news(self, limit: int = 10) -> pd.DataFrame:
+        """Market news feed from FMP."""
+        data = self._get("/fmp/news", limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def fmp_sector_pe(self, exchange: str = "NASDAQ") -> pd.DataFrame:
+        """Sector PE snapshots."""
+        data = self._get("/fmp/sector-pe", exchange=exchange)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def fmp_industry_pe(self, exchange: str = "NASDAQ") -> pd.DataFrame:
+        """Industry PE snapshots."""
+        data = self._get("/fmp/industry-pe", exchange=exchange)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+# ═══════════════════════════════════════════════════════════════════════
+    #  FUNDS  (N-PORT, Form D)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def funds_nport(self, cik: int | None = None, cusip: str | None = None, isin: str | None = None, limit: int = 500) -> pd.DataFrame:
+        """SEC Form N-PORT fund holdings."""
+        data = self._get("/funds/nport", cik=cik, cusip=cusip, isin=isin, limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def funds_nport_by_cik(self, cik: int, limit: int = 2000) -> pd.DataFrame:
+        """N-PORT holdings by fund CIK."""
+        data = self._get(f"/funds/nport/{cik}", limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def funds_form_d(self, cik: int | None = None, state: str | None = None, is_fund: bool | None = None, limit: int = 500) -> pd.DataFrame:
+        """SEC Form D exempt offerings."""
+        data = self._get("/funds/form-d", cik=cik, state=state, is_fund=is_fund, limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def funds_form_d_by_cik(self, cik: int) -> pd.DataFrame:
+        """Form D filings by issuer CIK."""
+        data = self._get(f"/funds/form-d/{cik}")
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    # ═══════════════════════════════════════════════════════════════════════
+    #  ADDITIONAL EQUITY / MARKET METHODS
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def price_change(self, identifier: str) -> dict:
+        """Total return over standard windows (1D to max)."""
+        return self._get(f"/equity/price-change/{identifier}")
+
+    def grade_news(self, limit: int = 100) -> pd.DataFrame:
+        """Latest analyst upgrade/downgrade news market-wide."""
+        data = self._get("/equity/grade-news", limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def price_target_news(self, identifier: str) -> pd.DataFrame:
+        """Recent analyst price-target changes for a security."""
+        data = self._get(f"/equity/price-target-news/{identifier}")
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def price_target_news_latest(self, limit: int = 100) -> pd.DataFrame:
+        """Latest analyst price-target changes market-wide."""
+        data = self._get("/equity/price-target-news-latest", limit=limit)
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def market_multiples(self, multiple_type: str = "pe") -> pd.DataFrame:
+        """Market-wide valuation multiple time series (pe, pb, ps, pc, liab)."""
+        data = self._get(f"/equity/market-multiples/{multiple_type}")
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+
+    def relative_move(self, identifier: str) -> dict:
+        """Today's price move relative to its exchange/benchmark."""
+        return self._get(f"/equity/relative-move/{identifier}")
+
+    def vendor_ratings(self, identifier: str) -> dict:
+        """Third-party analyst rating scores including European coverage."""
+        return self._get(f"/equity/vendor-ratings/{identifier}")
+
+    def news_feed_xml(self, language: str | None = None, type_: str | None = None) -> str:
+        """RSS Feed XML stream of all news."""
+        return self._get("/news/feed.xml", language=language, type=type_)
+
+    def partner_alleaktien(self, isins: list[str]) -> pd.DataFrame:
+        """Batch fundamental metrics from AlleAktien by ISINs."""
+        data = self._get("/partner/alleaktien/fundamentals", isins=",".join(isins))
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
