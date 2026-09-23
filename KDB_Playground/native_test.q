@@ -1,2 +1,4 @@
-\l KDB_Playground/achest.q
-.achest.fetch[`BTCUSDT; 2026.09.01; 2026.09.02; `minute]
+\l achest-kdb-q/achest.q
+tbl : .achest.fetch[`BTCUSDT; 2026.09.22; 2026.09.23; `minute; ()!()]
+\c 2000 10000
+tbl

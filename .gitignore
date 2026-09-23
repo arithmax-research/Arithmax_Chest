@@ -12,3 +12,4 @@ updating.md
 llms-full.txt
 *.log
 *.json
+*.pid

@@ -4,7 +4,7 @@ import pandas as pd
 from achest import MarketDataClient
 
 client = MarketDataClient('https://achestv2.misango.me')
-raw = client.get(['BTCUSDT'], '2026-09-01', '2026-09-23', 'minute')
+raw = client.get(['BTCUSDT'], '2026-09-01', '2026-09-23', 'second')
 client.close()
 
 df = pd.DataFrame(raw)

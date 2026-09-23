@@ -157,16 +157,32 @@ with MarketDataClient() as client:
 Fetch market data directly into a q table — no Python intermediary needed.
 
 ```q
-/ Load the client
-\l KDB_Playground/achest.q
+/ 1. Load the client
+\l achest-kdb-q/achest.q
 
-/ Fetch OHLCV as a native q table
-data: .achest.fetch[`BTCUSDT; 2026.09.01; 2026.09.23; `minute; ()!()]
+/ 2. Fetch OHLCV into a q table
+tbl: .achest.fetch[`BTCUSDT; 2026.09.01; 2026.09.23; `minute; ()!()]
 
-/ Schema and q-sql
-meta data
-select avg close by time from data
-select time, close, mavg[5; close] from data
+/ 3. Widen console and display
+\c 200 1000
+tbl
+
+/ 4. Schema and q-sql
+meta tbl
+select avg close by time from tbl
+select time, close, mavg[5; close] from tbl
+```
+
+```q
+/ Quick one-liner for a loaded session
+achestFetch[`BTCUSDT; 2026.09.01; 2026.09.23; `minute]
+
+/ With explicit provider
+.achest.fetch[`BTCUSDT; 2026.09.01; 2026.09.23; `minute; (`provider)!`massive]
+
+/ List providers and route symbols
+.achest.providers[]
+.achest.route[`AAPL; `daily; `auto]
 ```
 
 ### Using with PyKX (embedded Python in q)
@@ -192,6 +208,8 @@ df = df.drop(columns=['timestamp'])
 
 / Convert to q table
 tbl: .pykx.toq .pykx.get `df
+\c 200 1000
+tbl
 ```
 
 ### Pure q vs PyKX — comparison
@@ -206,22 +224,28 @@ tbl: .pykx.toq .pykx.get `df
 ### Available functions
 
 ```q
-/ Fetch market data
+/ Fetch market data (5 args — use ()!() for empty options)
 .achest.fetch[`BTCUSDT; 2026.09.01; 2026.09.23; `minute; ()!()]
-.achest.fetch4[`BTCUSDT; 2026.09.01; 2026.09.23; `minute]    / shorthand
+
+/ 4-arg shorthand (no options)
+.achest.fetch4[`BTCUSDT; 2026.09.01; 2026.09.23; `minute]
+
+/ Root-level alias
+achestFetch[`BTCUSDT; 2026.09.01; 2026.09.23; `minute]
 
 / With provider override
 .achest.fetch[`BTCUSDT; 2026.09.01; 2026.09.23; `minute; (`provider)!`massive]
 
+/ With custom API token
+.achest.fetch[`BTCUSDT; 2026.09.01; 2026.09.23; `minute; (`token)!("your-token";)]
+
 / List providers and route symbols
 .achest.providers[]
 .achest.route[`AAPL; `daily; `auto]
-
-/ Root-level alias
-achestFetch[`BTCUSDT; 2026.09.01; 2026.09.23; `minute]
 ```
 
 The q client requires `curl` and works with any q version. No token is needed when the server has auth disabled.
+
 ## Authentication and Configuration
 
 The hosted Chest API is `https://achestv2.misango.me`. Pass a server token with `token=` when the deployment requires one:
