@@ -27,14 +27,6 @@
 pip install arithmaxchest
 ```
 
-Optional dependencies:
-
-```bash
-pip install arithmaxchest[yahoo]      # Yahoo Finance via yfinance
-pip install arithmaxchest[futures]    # Databento historical futures data
-pip install arithmaxchest[server]     # Uvicorn for self-hosting
-pip install arithmaxchest[all]        # Yahoo, Databento, and server extras
-```
 
 Python 3.10 or newer is supported.
 

@@ -1,34 +1,37 @@
 #!/bin/bash
 
-# Configuration (KDB-X handles standard positive ports safely)
+# Configuration
 PORT=6003
 PID_FILE="./kdb_q.pid"
 LOG_FILE="./kdb_q.log"
 
+# Helper function to get real PIDs bound to the port
+get_port_pids() {
+    # Finds all PIDs (q and VS Code helpers) listening or established on the port
+    lsof -t -i :$PORT 2>/dev/null
+}
+
 start_q() {
-    # Check if already running
-    if [ -f "$PID_FILE" ] && kill -0 $(cat "$PID_FILE") 2>/dev/null; then
-        echo "❌ KDB-X is already running on port $PORT. (PID: $(cat "$PID_FILE"))"
+    # Check physical port usage first, then PID file
+    PORT_PIDS=$(get_port_pids)
+    if [ ! -z "$PORT_PIDS" ]; then
+        echo "❌ Port $PORT is already in use by PIDs: $(echo $PORT_PIDS | tr '\n' ' ')"
+        echo "💡 Run '$0 stop' first to clear it."
         exit 1
     fi
 
     echo "🚀 Starting KDB-X engine on port $PORT in the background..."
     
-    # Start q with a standard positive port, redirect log, and run as background daemon
     nohup q -p $PORT > "$LOG_FILE" 2>&1 &
-    
-    # Capture the process ID
     KDB_PID=$!
     echo $KDB_PID > "$PID_FILE"
-    
-    # Free up the terminal shell completely
     disown $KDB_PID
     
     sleep 1
     if kill -0 $KDB_PID 2>/dev/null; then
         echo "✅ KDB-X started cleanly! (PID: $KDB_PID)"
         echo "📝 Logs: $LOG_FILE"
-        echo "💡 Terminal is free. Point your VS Code Connection to localhost:$PORT"
+        echo "💡 Point your VS Code Connection to localhost:$PORT"
     else
         echo "❌ Failed to start. Run 'cat $LOG_FILE' to see why."
         rm -f "$PID_FILE"
@@ -36,28 +39,38 @@ start_q() {
 }
 
 stop_q() {
-    if [ ! -f "$PID_FILE" ]; then
-        echo "⚠️ No active PID file tracker found."
-        exit 1
+    echo "🛑 Scanning port $PORT for active processes..."
+    PORT_PIDS=$(get_port_pids)
+
+    if [ -z "$PORT_PIDS" ] && [ ! -f "$PID_FILE" ]; then
+        echo "🟢 Port $PORT is already clean. Nothing to stop."
+        return 0
     fi
 
-    PID=$(cat "$PID_FILE")
-    if kill -0 $PID 2>/dev/null; then
-        echo "🛑 Terminating KDB-X instance (PID: $PID)..."
-        kill $PID
-        rm -f "$PID_FILE"
-        echo "✅ Engine shut down completely."
-    else
-        echo "⚠️ Stale tracking profile found. Cleaning up."
-        rm -f "$PID_FILE"
+    # Terminate everything on that port (Matches your manual kill sequence)
+    if [ ! -z "$PORT_PIDS" ]; then
+        for pid in $PORT_PIDS; do
+            echo "Killing process $pid handling port $PORT..."
+            kill $pid 2>/dev/null
+            sleep 0.5
+            # Force kill if it refuses to release the socket
+            kill -0 $pid 2>/dev/null && kill -9 $pid 2>/dev/null
+        done
     fi
+
+    # Clean up track file
+    rm -f "$PID_FILE"
+    echo "✅ Port $PORT has been fully cleared and reset."
 }
 
 status_q() {
-    if [ -f "$PID_FILE" ] && kill -0 $(cat "$PID_FILE") 2>/dev/null; then
-        echo "🟢 KDB-X is RUNNING (PID: $(cat "$PID_FILE")) on port $PORT"
+    PORT_PIDS=$(get_port_pids)
+    if [ ! -z "$PORT_PIDS" ]; then
+        echo "🟢 KDB-X / Port $PORT is ACTIVE"
+        echo "Processes tracking on port:"
+        lsof -i :$PORT
     else
-        echo "🔴 KDB-X is STOPPED"
+        echo "🔴 KDB-X / Port $PORT is STOPPED"
     fi
 }
 
