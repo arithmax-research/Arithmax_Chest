@@ -160,6 +160,76 @@ with MarketDataClient() as client:
   table = client.q_table(["AAPL"], "2025-01-01", "2025-01-10", include_metadata=True)
 ```
 
+## kdb+/q Native Client
+
+Fetch market data directly into a q table — no Python intermediary needed.
+
+```q
+/ Load the client
+\l KDB_Playground/achest.q
+
+/ Fetch OHLCV as a native q table
+data: .achest.fetch[`BTCUSDT; 2026.09.01; 2026.09.23; `minute; ()!()]
+
+/ Schema and q-sql
+meta data
+select avg close by time from data
+select time, close, mavg[5; close] from data
+```
+
+### Using with PyKX (embedded Python in q)
+
+If you already use PyKX, the Python `MarketDataClient` works inside q too:
+
+```q
+/ Python code inside q via PyKX
+.pykx.pyexec"
+import pandas as pd
+from achest import MarketDataClient
+
+client = MarketDataClient('https://achestv2.misango.me')
+raw = client.get(['BTCUSDT'], '2026-09-01', '2026-09-23', 'minute')
+client.close()
+
+df = pd.DataFrame(raw)
+df['time'] = pd.to_datetime(df['timestamp'])
+for col in ['open', 'high', 'low', 'close', 'volume']:
+    df[col] = df[col].astype(float)
+df = df.drop(columns=['timestamp'])
+";
+
+/ Convert to q table
+tbl: .pykx.toq .pykx.get `df
+```
+
+### Pure q vs PyKX — comparison
+
+| Aspect | Pure q (`achest.q`) | PyKX approach |
+|--------|---------------------|---------------|
+| Dependencies | `curl` only | Python, pykx, pandas |
+| Latency | One HTTP call | Spawns Python, converts types |
+| Result type | Native q table | Native q table |
+| Auth | `DATA_API_TOKEN` env var | Python `MarketDataClient(token=)` |
+
+### Available functions
+
+```q
+/ Fetch market data
+.achest.fetch[`BTCUSDT; 2026.09.01; 2026.09.23; `minute; ()!()]
+.achest.fetch4[`BTCUSDT; 2026.09.01; 2026.09.23; `minute]    / shorthand
+
+/ With provider override
+.achest.fetch[`BTCUSDT; 2026.09.01; 2026.09.23; `minute; (`provider)!`massive]
+
+/ List providers and route symbols
+.achest.providers[]
+.achest.route[`AAPL; `daily; `auto]
+
+/ Root-level alias
+achestFetch[`BTCUSDT; 2026.09.01; 2026.09.23; `minute]
+```
+
+The q client requires `curl` and works with any q version. No token is needed when the server has auth disabled.
 ## Authentication and Configuration
 
 The hosted Chest API is `https://achestv2.misango.me`. Pass a server token with `token=` when the deployment requires one:
