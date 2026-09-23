@@ -538,9 +538,9 @@ def to_lean_zip(frame: pd.DataFrame, resolution: str) -> dict[str, bytes]:
     return result
 
 
-def _q_literal(value):
+def _q_literal(value, column: str = ""):
     if pd.isna(value):
-        return "0n"
+        return "0n" if column != "symbol" else "`"
     if isinstance(value, pd.Timestamp):
         value = value.to_pydatetime()
     if isinstance(value, datetime):
@@ -548,6 +548,8 @@ def _q_literal(value):
     if isinstance(value, (int, float)):
         return str(value)
     if isinstance(value, str):
+        if column == "symbol":
+            return f"`{value}"
         return f'"{value}"'
     return str(value)
 
@@ -588,7 +590,7 @@ def to_q_table(frame: pd.DataFrame, include_metadata: bool = False) -> str:
     lists = []
     for column in columns:
         values = [
-            _q_literal(value)
+            _q_literal(value, column)
             for value in table[column].tolist()
         ]
         lists.append(f"{column}:({'; '.join(values)})")

@@ -10,3 +10,5 @@ updating.md
 /Custom_Downloads
 ***.env***
 llms-full.txt
+*.log
+*.json

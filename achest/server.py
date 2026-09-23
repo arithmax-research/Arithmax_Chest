@@ -20,6 +20,7 @@ from .service import (
     fetch,
     select_provider,
     to_lean_zip,
+    to_q_table,
 )
 
 load_dotenv()
@@ -44,8 +45,8 @@ class DownloadRequest(BaseModel):
     @field_validator("format")
     @classmethod
     def valid_format(cls, value: str) -> str:
-        if value not in {"json", "csv", "parquet", "lean"}:
-            raise ValueError("format must be json, csv, parquet, or lean")
+        if value not in {"json", "csv", "parquet", "lean", "q"}:
+            raise ValueError("format must be json, csv, parquet, lean, or q")
         return value
 
 
@@ -111,6 +112,11 @@ def data(request: DownloadRequest) -> Response:
                 outer_buf.getvalue(),
                 media_type="application/zip",
                 headers={"Content-Disposition": "attachment; filename=market-data-lean.zip"},
+            )
+        if request.format == "q":
+            return Response(
+                to_q_table(table, include_metadata=True),
+                media_type="text/plain",
             )
         output = BytesIO()
         table.to_parquet(output, index=False)
