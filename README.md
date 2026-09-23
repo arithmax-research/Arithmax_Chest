@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="Treasure Chest DataGraph Logo.png">
-    <img src="Treasure Chest DataGraph Logo.png" alt="Arithmax Chest" width="120" height="120">
+    <img src="customisations/logo.png" alt="Arithmax Chest" width="120" height="120">
   </picture>
   <h1 align="center">achest</h1>
   <p align="center">
