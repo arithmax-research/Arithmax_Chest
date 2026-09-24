@@ -4,7 +4,7 @@
     "terminal.integrated.env.osx": {
         "QHOME": "/Users/misango/.kx/q",
         "QLIC": "/Users/misango/.kx",
-        "PYKX_PYTHON": "/Users/misango/anaconda3/envs/research_env/bin/python"
+        "PYKX_PYTHON": "/usr/local/bin/python3.14"
     },
     "kdb.connectionMap": {},
     "kdb.targetMap": {}
