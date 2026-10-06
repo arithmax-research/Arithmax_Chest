@@ -32,6 +32,26 @@ services:
       - default
       - proxy
 
+  qproxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.q
+    image: arithmax_chest-qproxy:latest
+    container_name: achest-qproxy
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "5001:5001"
+    environment:
+      DATA_API_TOKEN: ${DATA_API_TOKEN:-}
+    volumes:
+      - ./kc.lic:/root/.kx/kc.lic:ro     # mount license at runtime
+    depends_on:
+      - api
+    networks:
+      - default
+
 networks:
   default:
     name: achest_default

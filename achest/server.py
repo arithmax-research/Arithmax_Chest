@@ -9,6 +9,7 @@ from typing import Any
 import zipfile
 
 from dotenv import load_dotenv
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
@@ -25,6 +26,7 @@ from .service import (
 
 load_dotenv()
 app = FastAPI(title="Central Market Data API", version="0.5.0")
+app.add_middleware(GZipMiddleware, minimum_size=1000)  # compress responses >1KB
 
 
 class DownloadRequest(BaseModel):
