@@ -6,6 +6,28 @@
         "QLIC": "/Users/misango/.kx",
         "PYKX_PYTHON": "/usr/local/bin/python3.14"
     },
-    "kdb.connectionMap": {},
-    "kdb.targetMap": {}
+    "kdb.connectionMap": {
+        "tests": {
+            "host": "localhost",
+            "port": 6003,
+            "username": "",
+            "password": "",
+            "tls": false,
+            "type": "connection"
+        }
+    },
+    "kdb.targetMap": {},
+    "vscode-kdb-q.serverList": [
+        {
+            "alias": "local-q",
+            "host": "localhost",
+            "port": 6003,
+            "auth": false,
+            "tls": false,
+            "group": "local"
+        }
+    ],
+    "vscode-kdb-q.consoleViewEnabled": true,
+    "vscode-kdb-q.gridViewEnabled": true,
+    "vscode-kdb-q.documentViewEnabled": true
 }

@@ -71,16 +71,9 @@ chmod 600 "\${APP_DIR}/.env"
 if [[ -f "\${APP_DIR}/docker-compose.ec2.yml" ]]; then
   cd "\${APP_DIR}"
 
-# ... (Previous script steps stay the same until tearing down containers)
-
-  echo "Tearing down old containers and freeing bound network ports..."
-  # Stop nginx if running (it occupies port 80/443 on fresh EC2 instances)
-  sudo systemctl stop nginx 2>/dev/null || true
-  sudo kill -9 \$(lsof -t -i :80 -i :443 2>/dev/null) 2>/dev/null || true
+  echo "Tearing down the existing achest API container..."
   sudo docker compose --env-file .env -f docker-compose.ec2.yml down --remove-orphans || true
-  
-  # Release any stuck containers occupying port 80/443
-  sudo docker rm -f achest-api achest-caddy 2>/dev/null || true
+  sudo docker rm -f achest-api 2>/dev/null || true
 
   # === FIX: Clean up corrupted BuildKit & reset Docker Storage ===
   echo "Removing corrupted BuildKit builders..."
@@ -101,8 +94,6 @@ if [[ -f "\${APP_DIR}/docker-compose.ec2.yml" ]]; then
   echo "Building and starting fresh containers..."
   sudo docker compose --env-file .env -f docker-compose.ec2.yml build --no-cache api
   sudo docker compose --env-file .env -f docker-compose.ec2.yml up -d --force-recreate --remove-orphans
-
-# ... (Rest of the script stays exactly the same)
 
 else
   echo "docker-compose.ec2.yml not found in \${APP_DIR}; exiting without changing the running container."

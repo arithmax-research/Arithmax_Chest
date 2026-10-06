@@ -28,22 +28,13 @@ services:
       TIINGO_API_KEY: ${TIINGO_API_KEY:-}
       FRED_API_KEY: ${FRED_API_KEY:-}
       QUANDL_API_KEY: ${QUANDL_API_KEY:-}
+    networks:
+      - default
+      - proxy
 
-  caddy:
-    image: caddy:2.8-alpine
-    container_name: achest-caddy
-    restart: unless-stopped
-    depends_on:
-      - api
-    ports:
-      - "443:443"
-      - "80:80"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./certs:/etc/caddy/certs:ro
-      - achest_caddy_data:/data
-      - achest_caddy_config:/config
-
-volumes:
-  achest_caddy_data:
-  achest_caddy_config:
+networks:
+  default:
+    name: achest_default
+  proxy:
+    name: caddy-central_proxy
+    external: true

@@ -16,7 +16,7 @@ if[0N~@[system;"which curl 2>/dev/null";0N];
 \d .achest
 
 BASE_URL:"https://achestv2.misango.me"
-TOKEN:getenv`DATA_API_TOKEN
+TOKEN:getenv`DATA_API_TOKEN       / defaults to "" if env var not set
 
 / ── Build JSON payload via .j.j ──────────────────────
 mkpayload:{[syms;st;en;res;prov]
