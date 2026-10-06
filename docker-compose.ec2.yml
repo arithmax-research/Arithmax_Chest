@@ -8,8 +8,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    expose:
-      - "8000"
+    ports:
+      - "8001:8000"                 # map container:8000 → host:8001
     environment:
       EULERPOOL_API_KEY: ${EULERPOOL_API_KEY:-}
       DATA_API_TOKEN: ${DATA_API_TOKEN:-}

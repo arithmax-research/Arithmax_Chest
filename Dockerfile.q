@@ -43,8 +43,8 @@ COPY kc.lic /root/.kx/kc.lic
 COPY achest-kdb-q/qserver_proxy.q /app/qserver_proxy.q
 
 # ── 5) Expose ports ────────────────────────────────────
-EXPOSE 8000      # FastAPI
-EXPOSE 5001      # q IPC proxy
+EXPOSE 8000      
+EXPOSE 5001     
 
 # ── 6) Start both services ─────────────────────────────
 CMD sh -c '\
