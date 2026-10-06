@@ -103,9 +103,12 @@ ipcConnect:{[host;port]
 
 ipcFetch:{[h;syms;st;en;res;prov]
   prov:$[`~prov; `auto; prov];
-  neg[h] (`fetch; syms; st; en; res; prov);
-  r:h[];
-  if[-11h=type r; :'r];                 / if server signaled an error
+  rfn:h (`fetch; syms; st; en; res; prov);
+  if[-11h=type rfn; :'rfn];                / if server signaled an error
+  fh:hopen `$":",rfn;                       / open response file
+  r:value read(fh; hcount fh);              / read and parse
+  hclose fh;
+  @[system;"rm -f ",rfn;0N];               / clean up
   r }
 
 ipcClose:{[h] hclose h; }

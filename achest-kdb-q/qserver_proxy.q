@@ -7,7 +7,7 @@ fmtDate:{ssr[string x;".";"-"]};
   st:fmtDate x 2;
   en:fmtDate x 3;
   res:$[10h=type x 4; x 4; string x 4];
-  prov:$[10h=type x 5; x 5; "auto"];          / provider optional (default "auto")
+  prov:$[10h=type x 5; x 5; "auto"];
   token:getenv`DATA_API_TOKEN;
   payload:.j.j `symbols`start`end`resolution`provider`format!(syms;st;en;res;prov;`q);
   fn:"/tmp/_qproxy_",string .z.i;
@@ -19,5 +19,8 @@ fmtDate:{ssr[string x;".";"-"]};
   if[0N~r; '`nocur];
   if[0h=type r; r:raze r];
   if["curl: ("~9#r; '`curlerr];
-  value r
+  rfn:"/tmp/_qresp_",string .z.i;
+  (`$":",rfn) 0: enlist r;
+  rfn                                      / return filename
  };
+
