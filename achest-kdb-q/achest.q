@@ -112,9 +112,9 @@ ipcClose:{[h] hclose h; }
 / One-shot: connect, fetch, close (supports 6 or 7 args)
 ipc:{[host;port;syms;st;en;res;prov]
   if[`~prov; prov:`auto];
-  h:@[.achest.ipcConnect; (host;port); {'"ipc connect failed: ",x}];
-  r:@[.achest.ipcFetch; (h; syms; st; en; res; prov); {'"ipc fetch failed: ",x}];
-  @[.achest.ipcClose; h; {0N}];
+  h:.[.achest.ipcConnect; (host;port); {'"ipc connect failed: ",x}];
+  r:.[.achest.ipcFetch; (h; syms; st; en; res; prov); {'"ipc fetch failed: ",x}];
+  .[.achest.ipcClose; enlist h; {0N}];
   r }
 
 
