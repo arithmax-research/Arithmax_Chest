@@ -39,18 +39,20 @@ curlpost:{[payload;token]
   auth:$[""~token; ""; " -H 'Authorization: Bearer ",token,"'"];
   fn:"/tmp/_qpayload_",string .z.i;              / unique temp file per PID
   (`$":",fn) 0: enlist payload;                    / write JSON payload to file
+  rfn:"/tmp/_qresp_",string .z.i;                     / response temp file
   cmd:"curl -s --max-time 600 --compressed --keepalive-time 60",
       auth,
       " -H 'Content-Type: application/json'",
-      " -X POST -d @",fn," '",BASE_URL,"/v1/data' 2>&1 || true";
-  r:@[system;cmd;0N];                          / 0N = "command failed" sentinel
-  if[0N~r; '"curl: command could not start\ncmd:\n",cmd];
-  @[system;"rm -f ",fn;0N];                          / clean up temp file
-  if[0h=type r; r:raze r];           / join list of lines into one string
-  / safe type coercion for KDB-X: convert anything to string
-  if[not 10h=type r; r:$[0h=type r; raze string r; string r]];
-  if["curl: ("~9#r; '"curl: ",r];                    / detect curl errors (timeout, DNS, etc.)
+      " -X POST -d @",fn," '",BASE_URL,"/v1/data' > ",rfn," 2>&1 || true";
+  @[system;cmd;0N];                                   / run curl, output goes to rfn
+  @[system;"rm -f ",fn;0N];                           / clean up payload file
+  r:@[read0; `$":",rfn; {""}];                        / read response from file
+  @[system;"rm -f ",rfn;0N];                          / clean up response file
+  if[0h=type r; r:raze r];                            / join multi-line response
+  if[not 10h=type r; r:""];                           / safety: coerce to empty string
+  if["curl: ("~9#r; '"curl: ",r];                     / detect curl errors (timeout, DNS, etc.)
   :r }                                / return raw response
+
 / ── Core single-request fetch (no parallelism) ──────────
 fetchSingle:{[syms;st;en;res;opts]
   prov:$[`provider in key opts; opts`provider; `auto];
@@ -141,4 +143,3 @@ route:{[sym;res;prov]
 / ── Root-level alias for easier VS Code use ──────────
 if[not `achestFetch in key `;
   achestFetch:{[s;st;en;res] .achest.fetch4[s;st;en;res]}]
-
