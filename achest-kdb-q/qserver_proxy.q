@@ -45,5 +45,7 @@ fmtDate:{ssr[string x;".";"-"]};
   /parse JSON response
   resStr:$[0h=type r; 10h$raze r,"\n"; string r];
   
-  :.j.d resStr
- };
+  response:.j.k resStr;
+  if[not `data in key response; :`nodata];
+  :response`data;
+   };
