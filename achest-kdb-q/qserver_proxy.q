@@ -27,22 +27,13 @@ fmtDate:{ssr[string x;".";"-"]};
   (`$":",fn) 0: enlist payload;
   
   auth:$[""~token; ""; " -H 'Authorization: Bearer ",token,"'"];
-  curlcmd:"curl -s --max-time 30 --compressed",auth," -H 'Content-Type: application/json' -X POST -d @",fn," 'http://localhost:8001/v1/data'";
-  
-  / Run curl and capture output safely
-  r:@[system;curlcmd;0N];
+  rfn:"/tmp/_qproxyresp_",string .z.i;
+  curlcmd:"curl -s --max-time 30 --compressed",auth," -H 'Content-Type: application/json' -X POST -d @",fn," 'http://localhost:8001/v1/data' > ",rfn," 2>&1 || true";
+  @[system;curlcmd;0N];
   @[system;"rm -f ",fn;0N];
-  
+  r:@[read0; `$":",rfn; 0N];
+  @[system;"rm -f ",rfn;0N];
   if[0N~r; :`nocur];
-  
-  / system returns a list of strings for multi-line output; flatten with newline or raze
-  /resStr:$[0h=type r; 10h$raze r,"\n"; string r];
-  
-  /rfn:"/tmp/_qresp_",string .z.i;
-  /(`$":",rfn) 0: enlist resStr;
-  /:rfn;
-
-/ parse q-literal or JSON response safely
   resStr:$[0h=type r; 10h$raze r,"\n"; string r];
   / Try 1: value as q literal (format = "q" response)
   response:@[value; resStr; { 
