@@ -42,10 +42,17 @@ fmtDate:{ssr[string x;".";"-"]};
   /(`$":",rfn) 0: enlist resStr;
   /:rfn;
 
-  /parse JSON response
+/ parse JSON response and show the data or error
   resStr:$[0h=type r; 10h$raze r,"\n"; string r];
   
-  response:.j.k resStr;
-  if[not `data in key response; :`nodata];
-  :response`data;
-   };
+  / Safely parse JSON string into q dictionary
+  response: @[.j.k; resStr; { -2 "JSON parse error: ", x; (`error)!enlist x }];
+  
+  / Check if it's an error dictionary or missing data
+  if[99h ~ type response;
+    if[`error in key response; :response];
+    if[not `data in key response; :`nodata];
+    :response`data
+  ];
+  
+  :response
