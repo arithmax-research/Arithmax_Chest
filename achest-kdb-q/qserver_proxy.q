@@ -36,12 +36,14 @@ fmtDate:{ssr[string x;".";"-"]};
   if[0N~r; :`nocur];
   
   / system returns a list of strings for multi-line output; flatten with newline or raze
-  resStr:$[0h=type r; 10h$raze r,"\n"; string r];
+  /resStr:$[0h=type r; 10h$raze r,"\n"; string r];
   
   /rfn:"/tmp/_qresp_",string .z.i;
   /(`$":",rfn) 0: enlist resStr;
   /:rfn;
 
   /parse JSON response
-  value resStr;
+  resStr:$[0h=type r; 10h$raze r,"\n"; string r];
+  
+  :.j.d resStr
  };
