@@ -103,13 +103,14 @@ ipcConnect:{[host;port]
 
 ipcFetch:{[h;syms;st;en;res;prov]
   p:$[`~prov; `auto; prov];
-  rfn:h (`fetch; syms; st; en; res; p);
-  if[-11h=type rfn; 'rfn];                 / if server signaled an error
+  / The server now returns the table directly over the wire
+  h (`fetch; syms; st; en; res; p)
+ }                / if server signaled an error
   
   / Ask the server to read and clean up the temp file via the allowed 'read' command
   contents: h (`read; rfn);
   r:value raze contents;
-  r }
+  r 
 
 ipcClose:{[h] hclose h; }
 
