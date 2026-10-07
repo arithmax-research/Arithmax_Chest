@@ -104,22 +104,21 @@ ipcConnect:{[host;port]
 ipcFetch:{[h;syms;st;en;res;prov]
   prov:$[`~prov; `auto; prov];
   rfn:h (`fetch; syms; st; en; res; prov);
-  if[-11h=type rfn; :'rfn];                / if server signaled an error
-  fh:hopen `$":",rfn;                       / open response file
-  r:value read(fh; hcount fh);              / read and parse
-  hclose fh;
-  @[system;"rm -f ",rfn;0N];               / clean up
+  if[-11h=type rfn; 'rfn];                 / if server signaled an error
+  lines:read0 `$":",rfn;
+  r:value raze lines;
+  @[system;"rm -f ",rfn;0N];
   r }
 
 ipcClose:{[h] hclose h; }
 
-/ One-shot: connect, fetch, close
+/ One-shot: connect, fetch, close (supports 6 or 7 args)
 ipc:{[host;port;syms;st;en;res;prov]
-  h:.achest.ipcConnect[host;port];
-  r:@[.achest.ipcFetch[h;syms;st;en;res;prov];{.'"ipc: ",x}];
-  .achest.ipcClose[h];
+  if[`~prov; prov:`auto];
+  h:@[.achest.ipcConnect; (host;port); {'"ipc connect failed: ",x}];
+  r:@[.achest.ipcFetch; (h; syms; st; en; res; prov); {'"ipc fetch failed: ",x}];
+  @[.achest.ipcClose; h; {0N}];
   r }
-
 / ── List providers ───────────────────────────────────
 providers:{[]
   auth:$[""~TOKEN; ""; " -H 'Authorization: Bearer ",TOKEN,"'"];
@@ -141,3 +140,4 @@ route:{[sym;res;prov]
 / ── Root-level alias for easier VS Code use ──────────
 if[not `achestFetch in key `;
   achestFetch:{[s;st;en;res] .achest.fetch4[s;st;en;res]}]
+
