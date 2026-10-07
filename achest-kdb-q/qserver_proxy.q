@@ -18,12 +18,31 @@ fmtDate:{ssr[string x;".";"-"]};
   (`$":",fn) 0: enlist payload;
 
   auth:$[""~token; ""; " -H 'Authorization: Bearer ",token,"'"];
+<<<<<<< HEAD
 
   curlcmd:"curl -s --max-time 30 --compressed",auth," -H 'Content-Type: application/json' -X POST -d @",fn," 'http://localhost:8001/v1/data' 2>&1 || true";
   r:@[system;curlcmd;0N];
   @[system;"rm -f ",fn;0N];
   if[0N~r; :`nocur];
 
+=======
+  curlcmd:"curl -s --max-time 30 --compressed",auth," -H 'Content-Type: application/json' -X POST -d @",fn," 'http://localhost:8001/v1/data'";
+  
+  / Run curl and capture output safely
+  r:@[system;curlcmd;0N];
+  @[system;"rm -f ",fn;0N];
+  
+  if[0N~r; :`nocur];
+  
+  / system returns a list of strings for multi-line output; flatten with newline or raze
+  /resStr:$[0h=type r; 10h$raze r,"\n"; string r];
+  
+  /rfn:"/tmp/_qresp_",string .z.i;
+  /(`$":",rfn) 0: enlist resStr;
+  /:rfn;
+
+/ parse q-literal or JSON response safely
+>>>>>>> parent of 26f4599 (IPC owns the data now)
   resStr:$[0h=type r; 10h$raze r,"\n"; string r];
   @[value; resStr; {`nodata}]
  };
