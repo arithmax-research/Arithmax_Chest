@@ -102,12 +102,13 @@ ipcConnect:{[host;port]
   h }
 
 ipcFetch:{[h;syms;st;en;res;prov]
-  prov:$[`~prov; `auto; prov];
-  rfn:h (`fetch; syms; st; en; res; prov);
+  p:$[`~prov; `auto; prov];
+  rfn:h (`fetch; syms; st; en; res; p);
   if[-11h=type rfn; 'rfn];                 / if server signaled an error
-  lines:read0 `$":",rfn;
-  r:value raze lines;
-  @[system;"rm -f ",rfn;0N];
+  
+  / Ask the server to read and clean up the temp file via the allowed 'read' command
+  contents: h (`read; rfn);
+  r:value raze contents;
   r }
 
 ipcClose:{[h] hclose h; }
@@ -119,6 +120,10 @@ ipc:{[host;port;syms;st;en;res;prov]
   r:@[.achest.ipcFetch; (h; syms; st; en; res; prov); {'"ipc fetch failed: ",x}];
   @[.achest.ipcClose; h; {0N}];
   r }
+
+
+
+
 / ── List providers ───────────────────────────────────
 providers:{[]
   auth:$[""~TOKEN; ""; " -H 'Authorization: Bearer ",TOKEN,"'"];

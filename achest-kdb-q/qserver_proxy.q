@@ -5,6 +5,15 @@ fmtDate:{ssr[string x;".";"-"]};
   cmd:first x;
   if[not `text~cmd; if[not `fetch~cmd; '`unknown]];
   
+  / Handle remote file read & cleanup request
+  if[`read~cmd;
+    rfn: x 1;
+    res: read0 `$rfn;
+    system "rm -f ",rfn;
+    :res];
+
+  / ... existing fetch / text logic ...
+  
   syms:enlist $[10h=type x 1; x 1; string x 1];
   st:fmtDate x 2;
   en:fmtDate x 3;
