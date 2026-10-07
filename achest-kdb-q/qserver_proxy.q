@@ -1,5 +1,8 @@
-/ qserver_proxy.q — q IPC proxy for FastAPI
+/ qserver_proxy.q — q IPC proxy for FastAPI + LRU cache
 fmtDate:{ssr[string x;".";"-"]};
+
+/ LRU cache: query key → (table; timestamp)
+.cache:()!();
 
 .z.pg:{[x]
   cmd:first x;
@@ -20,6 +23,16 @@ fmtDate:{ssr[string x;".";"-"]};
   res:$[10h=type x 4; x 4; string x 4];
   prov:$[10h=type x 5; x 5; "auto"];
   
+  / Build cache key from query params (skip command name)
+  qkey:`$"," sv string 1_ x;
+  
+  / Check cache — return if < 30 min old
+  if[99h=type .cache;
+    if[qkey in key .cache;
+      c:.cache qkey;
+      if[-12h=type c 0;
+        if[.z.p < c 1 + 1800000000000; :c 0]]]];
+  
   token:getenv`DATA_API_TOKEN;
   payload:.j.j `symbols`start`end`resolution`provider`format!(syms;st;en;res;prov;`q);
   
@@ -35,11 +48,14 @@ fmtDate:{ssr[string x;".";"-"]};
   @[system;"rm -f ",rfn;0N];
   if[0N~r; :`nocur];
   resStr:$[0h=type r; 10h$raze r,"\n"; string r];
-  / Try 1: value as q literal (format = "q" response)
-  response:@[value; resStr; { 
-    / Try 2: .j.k as JSON (error responses from FastAPI)
-    @[.j.k; resStr; {`nodata}]
-   }];
-  / Return table if we got one, otherwise nodata
-  $[98h=type response; response; `nodata]
+  response:@[value; resStr; { @[.j.k; resStr; {`nodata}] }];
+  
+  / Cache table results (max 100 entries)
+  if[98h=type response;
+    .cache[qkey]:(response; .z.p);
+    if[100<count key .cache;
+      .cache:((count[key .cache] - 100) _ key .cache)#.cache];
+    :response];
+  
+  `nodata
  };
