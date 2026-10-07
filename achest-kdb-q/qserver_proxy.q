@@ -42,14 +42,13 @@ fmtDate:{ssr[string x;".";"-"]};
   /(`$":",rfn) 0: enlist resStr;
   /:rfn;
 
-/ parse JSON response safely and return the error
+/ parse q-literal or JSON response safely
   resStr:$[0h=type r; 10h$raze r,"\n"; string r];
-  response: @[.j.k; resStr; { (`error)!enlist x }];
-  
-  / Return data (flipped to a table), error, or nodata cleanly
-  $[99h ~ type response;
-    $[ `error in key response; response;
-       not `data in key response; `nodata;
-       @[flip; response`data; response`data] ];
-    response]
+  / Try 1: value as q literal (format = "q" response)
+  response:@[value; resStr; { 
+    / Try 2: .j.k as JSON (error responses from FastAPI)
+    @[.j.k; resStr; {`nodata}]
+   }];
+  / Return table if we got one, otherwise nodata
+  $[98h=type response; response; `nodata]
  };
