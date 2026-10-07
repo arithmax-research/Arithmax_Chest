@@ -105,12 +105,7 @@ ipcFetch:{[h;syms;st;en;res;prov]
   p:$[`~prov; `auto; prov];
   / The server now returns the table directly over the wire
   h (`fetch; syms; st; en; res; p)
- }                / if server signaled an error
-  
-  / Ask the server to read and clean up the temp file via the allowed 'read' command
-  contents: h (`read; rfn);
-  r:value raze contents;
-  r 
+ }                / if server signaled an error  
 
 ipcClose:{[h] hclose h; }
 
