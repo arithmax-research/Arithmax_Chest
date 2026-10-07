@@ -12,14 +12,12 @@ res:$[5>count .z.x;`daily;`$.z.x 5]
 t0:.z.p;tbl:.achest.fetch[sym;st;en;res;()!()]
 -1 "  ",string[`long$(.z.p-t0)%1000000]," ms  rows:",string count tbl
 
--1 "--- IPC (cold) ---"
-t0:.z.p;h:.achest.ipcConnect[host;port]
-tbl:h (`fetch;sym;st;en;string res;string"auto")
+-1 "--- IPC (cold then warm, persistent connection) ---"
+h:.achest.ipcConnect[host;port]
+t0:.z.p;tbl:h (`fetch;sym;st;en;string res;string"auto")
+cold:.z.p-t0
+t0:.z.p;tbl:h (`fetch;sym;st;en;string res;string"auto")
+warm:.z.p-t0
 .achest.ipcClose[h]
--1 "  ",string[`long$(.z.p-t0)%1000000]," ms  rows:",string count tbl
-
--1 "--- IPC (cached) ---"
-t0:.z.p;h:.achest.ipcConnect[host;port]
-tbl:h (`fetch;sym;st;en;string res;string"auto")
-.achest.ipcClose[h]
--1 "  ",string[`long$(.z.p-t0)%1000000]," ms  rows:",string count tbl
+-1 "  cold: ",string[`long$(cold%1000000)]," ms rows:",string count tbl
+-1 "  warm: ",string[`long$(warm%1000000)]," ms rows:",string count tbl

@@ -270,6 +270,13 @@ pip install arithmaxchest[all]
 uvicorn achest.server:app --host 0.0.0.0 --port 8000
 ```
 
+The data endpoint keeps a bounded in-process cache for repeated IPC or HTTP
+requests. Configure it with `DATA_CACHE_TTL_SECONDS` (default `60`),
+`HOT_CACHE_TTL_SECONDS` (default `30`), and `DATA_CACHE_MAX_ENTRIES` (default
+`256`). The configured hot universe covers selected US, Hong Kong, Korean, UK,
+commodity, leveraged ETF, and crypto symbols. Futures and options remain
+on-demand and are not prefetched. Each server worker has its own cache.
+
 The FastAPI service exposes `/health`, `/v1/providers`, `/v1/route`, `/v1/data`, and the extended `/v1/eulerpool/...` endpoints. Docker and EC2 deployment files are included in the repository.
 
 ## Why Arithmax Chest?

@@ -4,6 +4,8 @@ from __future__ import annotations
 from datetime import date
 from io import BytesIO
 import os
+import threading
+import time
 from typing import Any
 
 import zipfile
@@ -23,10 +25,50 @@ from .service import (
     to_lean_zip,
     to_q_table,
 )
+from .hot_universe import is_hot
 
 load_dotenv()
 app = FastAPI(title="Central Market Data API", version="0.5.0")
 app.add_middleware(GZipMiddleware, minimum_size=1000)  # compress responses >1KB
+
+_DATA_CACHE_TTL = float(os.getenv("DATA_CACHE_TTL_SECONDS", "60"))
+_HOT_CACHE_TTL = float(os.getenv("HOT_CACHE_TTL_SECONDS", "30"))
+_DATA_CACHE_MAX_ENTRIES = int(os.getenv("DATA_CACHE_MAX_ENTRIES", "256"))
+_data_cache: dict[tuple, tuple[float, Any]] = {}
+_data_cache_lock = threading.Lock()
+
+
+def _data_cache_key(request: DownloadRequest) -> tuple:
+    return (
+        tuple(request.symbols),
+        request.start,
+        request.end,
+        request.resolution,
+        request.provider,
+    )
+
+
+def _cached_frame(request: DownloadRequest) -> Any:
+    key = _data_cache_key(request)
+    now = time.monotonic()
+    with _data_cache_lock:
+        cached = _data_cache.get(key)
+        if cached is None:
+            return None
+        stored_at, frame = cached
+        ttl = _HOT_CACHE_TTL if is_hot(request.symbols) else _DATA_CACHE_TTL
+        if now - stored_at >= ttl:
+            del _data_cache[key]
+            return None
+        return frame.copy(deep=True)
+
+
+def _store_frame(request: DownloadRequest, frame: Any) -> None:
+    key = _data_cache_key(request)
+    with _data_cache_lock:
+        _data_cache[key] = (time.monotonic(), frame.copy(deep=True))
+        while len(_data_cache) > _DATA_CACHE_MAX_ENTRIES:
+            del _data_cache[next(iter(_data_cache))]
 
 
 class DownloadRequest(BaseModel):
@@ -92,7 +134,10 @@ def route(symbol: str, resolution: str = Query(default="daily"), provider: str =
 @app.post("/v1/data", dependencies=[Depends(require_client_token)])
 def data(request: DownloadRequest) -> Response:
     try:
-        frame = fetch(DataRequest(request.symbols, request.start, request.end, request.resolution, request.provider))
+        frame = _cached_frame(request)
+        if frame is None:
+            frame = fetch(DataRequest(request.symbols, request.start, request.end, request.resolution, request.provider))
+            _store_frame(request, frame)
     except (UnsupportedRequest, ValueError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     except Exception as error:
