@@ -46,10 +46,10 @@ fmtDate:{ssr[string x;".";"-"]};
   resStr:$[0h=type r; 10h$raze r,"\n"; string r];
   response: @[.j.k; resStr; { (`error)!enlist x }];
   
-  / Return data, error, or nodata cleanly using q's conditional operator ($)
+  / Return data (flipped to a table), error, or nodata cleanly
   $[99h ~ type response;
     $[ `error in key response; response;
        not `data in key response; `nodata;
-       response`data ];
+       @[flip; response`data; response`data] ];
     response]
  };
