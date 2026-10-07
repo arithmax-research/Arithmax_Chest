@@ -97,7 +97,8 @@ fetch4:{[syms;st;en;res] .achest.fetch[syms;st;en;res;()!()] }
 /     tbl:.achest.ipc[`aws-host;5001;`BTCUSDT;2026.09.01;2026.10.06;`second]
 / ─────────────────────────────────────────────────────────
 ipcConnect:{[host;port]
-  h:hopen `$":",host,":",string port;
+  addr:":",string host,":",string port;
+  h:hopen `$addr;
   if[h<=0; '"ipc: cannot connect to ",host,":",string port];
   h }
 
