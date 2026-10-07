@@ -8,6 +8,9 @@ h:.achest.ipcConnect[`13.212.15.78;5001]
 tbl:h (`fetch; `BTCUSDT; 2026.09.01; 2026.10.06; "daily"; "auto")
 
 -1 "rows: ", string count tbl;
+-1 "meta:";
 meta tbl
+-1 "data:";
+tbl
 
 .achest.ipcClose[h]
