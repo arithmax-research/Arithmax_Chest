@@ -72,7 +72,7 @@ if [[ -f "\${APP_DIR}/docker-compose.ec2.yml" ]]; then
   cd "\${APP_DIR}"
 
   echo "Tearing down the existing achest API container..."
-  sudo docker compose --env-file .env -f docker-compose.ec2.yml down --remove-orphans || true
+  sudo docker compose --env-file .env -f docker-compose.ec2.yml down --remove-orphans api || true
   sudo docker rm -f achest-api 2>/dev/null || true
 
   # === FIX: Clean up corrupted BuildKit & reset Docker Storage ===
@@ -93,7 +93,7 @@ if [[ -f "\${APP_DIR}/docker-compose.ec2.yml" ]]; then
 
   echo "Building and starting fresh containers..."
   sudo docker compose --env-file .env -f docker-compose.ec2.yml build --no-cache api
-  sudo docker compose --env-file .env -f docker-compose.ec2.yml up -d --force-recreate --remove-orphans
+  sudo docker compose --env-file .env -f docker-compose.ec2.yml up -d --force-recreate --remove-orphans api
 
 else
   echo "docker-compose.ec2.yml not found in \${APP_DIR}; exiting without changing the running container."

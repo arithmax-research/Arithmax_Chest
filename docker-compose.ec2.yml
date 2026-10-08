@@ -33,6 +33,11 @@ services:
       - proxy
 
   qproxy:
+    # Opt-in only: `docker compose --profile q ...`.
+    # q is installed natively on the EC2 host, so this service is not part of
+    # the default API rebuild/deploy flow and is skipped unless requested.
+    profiles:
+      - q
     build:
       context: .
       dockerfile: Dockerfile.q
