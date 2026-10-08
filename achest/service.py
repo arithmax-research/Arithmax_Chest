@@ -72,6 +72,8 @@ class UnsupportedRequest(ValueError):
 
 def classify_symbol(symbol: str) -> str:
     clean = symbol.upper().strip()
+    if _forex_pair(clean):
+        return "forex"
     if clean.endswith(("USDT", "USDC", "-USD")):
         return "crypto"
     if clean.endswith(".FUT") or ".c." in clean or clean in FUTURES_ROOTS:
@@ -83,6 +85,40 @@ def classify_symbol(symbol: str) -> str:
     if clean.isalpha() and len(clean) <= 5:
         return "equity"
     return "equity"
+
+
+# Common fiat/currency codes used to recognise a bare ``EURUSD``-style pair.
+_CURRENCY_CODES = {
+    "USD", "EUR", "GBP", "JPY", "CHF", "AUD", "NZD", "CAD", "CNY", "CNH",
+    "HKD", "SGD", "SEK", "NOK", "DKK", "TRY", "MXN", "ZAR", "INR", "BRL",
+    "RUB", "PLN", "CZK", "HUF", "KRW", "TWD", "THB", "ILS", "SAR", "AED",
+}
+
+
+def _forex_pair(symbol: str) -> tuple[str, str] | None:
+    """Return ``(base, quote)`` if *symbol* names a currency pair.
+
+    Accepts ``EUR/USD``, ``EUR-USD``, ``EUR_USD``, ``EURUSD`` and the
+    Yahoo-style ``EURUSD=X`` suffix.  Returns ``None`` when the symbol is
+    not an unambiguous FX pair.
+    """
+    clean = symbol.upper().strip()
+    if clean.endswith("=X"):
+        clean = clean[:-2]
+
+    for sep in ("/", "-", "_", ":"):
+        if sep in clean:
+            base, _, quote = clean.partition(sep)
+            if base and quote:
+                return base, quote
+            return None
+
+    if len(clean) == 6 and clean.isalpha():
+        base, quote = clean[:3], clean[3:]
+        if base in _CURRENCY_CODES and quote in _CURRENCY_CODES:
+            return base, quote
+    return None
+
 
 
 # Map provider -> env var name for required API key (empty = no key needed)
@@ -406,11 +442,16 @@ def _eulerpool(symbol: str, request: DataRequest) -> pd.DataFrame:
 
     ep = EulerpoolProvider()
     asset = classify_symbol(symbol)
-    if asset in ("crypto",):
+    if asset == "crypto":
         return ep.crypto_quotes(symbol, request.start, request.end)
-    if asset in ("commodity",):
+    if asset == "commodity":
         return ep.commodity_quotes(symbol, request.start, request.end)
-    # equity, etf, index, forex — all use the same generic path
+    if asset == "forex":
+        pair = _forex_pair(symbol)
+        if pair:
+            # Eulerpool has no /forex/quotes endpoint; FX lives at /market/fx/{from}/{to}.
+            return ep.forex_quotes(*pair, start=request.start, end=request.end)
+    # equity, etf, index — all use the same generic path
     return ep.equity_quotes(symbol, request.start, request.end)
 
 

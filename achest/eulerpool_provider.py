@@ -258,6 +258,112 @@ class EulerpoolProvider:
                 })
         return pd.DataFrame(rows) if rows else pd.DataFrame()
 
+    def forex_quotes(
+        self, from_curr: str, to_curr: str,
+        start: date | None = None, end: date | None = None,
+    ) -> pd.DataFrame:
+        """Historical daily quotes for a currency pair.
+
+        Eulerpool exposes FX only through ``/market/fx/{from}/{to}``, which
+        returns ``{rates: [{date, rate}]}`` and is windowed by a ``range``
+        string (no date parameters).  We request the smallest standard range
+        that covers ``[start, end]`` and then clip the returned rates to the
+        requested window, emitting the standard OHLCV schema (``rate`` is
+        mapped to ``close`` and copied to ``open`` / ``high`` / ``low``).
+        """
+        range_ = self._range_for(start, end)
+
+        # Some Eulerpool tiers return no rows for the short ranges (e.g. ``1m``
+        # / ``3m``); escalate until a range yields data, then clip to the window.
+        attempted: list[str] = []
+        rates: list[Any] = []
+        for candidate in self._range_escalation(range_):
+            data = self._get(f"/market/fx/{from_curr}/{to_curr}", range=candidate)
+            if not isinstance(data, dict):
+                continue
+            attempted.append(candidate)
+            rates = data.get("rates", []) or []
+            if rates:
+                break
+
+        rows = []
+        for entry in rates:
+            ts, price = self._parse_fx_entry(entry)
+            if ts is None:
+                continue
+            rows.append({
+                "timestamp": ts, "open": price, "high": price,
+                "low": price, "close": price, "volume": 0,
+            })
+        frame = pd.DataFrame(rows)
+        if frame.empty:
+            return frame
+        frame["timestamp"] = pd.to_datetime(frame["timestamp"], utc=True)
+        frame = frame.set_index("timestamp").sort_index()
+        return self._clip_to_range(frame, start, end)
+
+    @staticmethod
+    def _parse_fx_entry(entry: Any) -> tuple[datetime | None, float]:
+        """Parse one ``/market/fx`` rate entry into ``(timestamp, price)``.
+
+        The live API returns entries as ``[timestamp_ms, rate]`` pairs, but the
+        published docs describe ``{"date": ..., "rate": ...}`` dicts — accept both.
+        """
+        if isinstance(entry, dict):
+            ts_raw = entry.get("timestamp", entry.get("date"))
+            price = entry.get("rate", entry.get("close", 0)) or 0
+        elif isinstance(entry, (list, tuple)) and len(entry) >= 2:
+            ts_raw, price = entry[0], entry[1]
+        else:
+            return None, 0.0
+        return EulerpoolProvider._to_utc(ts_raw), float(price or 0)
+
+    @staticmethod
+    def _to_utc(value: Any) -> datetime | None:
+        """Coerce a millisecond epoch, ISO string, or datetime to naive UTC."""
+        if isinstance(value, (int, float)):
+            return EulerpoolProvider._ts_ms(int(value))
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            parsed = pd.to_datetime(value, utc=True, errors="coerce")
+            return None if pd.isna(parsed) else parsed.to_pydatetime().replace(tzinfo=None)
+        return None
+
+
+
+    @staticmethod
+    def _range_for(start: date | None, end: date | None) -> str:
+        """Pick the smallest Eulerpool ``range`` token covering ``[start, end]``."""
+        if not start or not end:
+            return "max"
+        span_days = (end - start).days
+        for token, days in (
+            ("1m", 31), ("3m", 93), ("6m", 186),
+            ("1y", 366), ("2y", 731), ("5y", 1827),
+        ):
+            if span_days <= days:
+                return token
+        return "max"
+
+    @staticmethod
+    def _range_escalation(chosen: str) -> list[str]:
+        """Return the chosen range followed by progressively larger ranges."""
+        order = ["1m", "3m", "6m", "1y", "2y", "5y", "max"]
+        if chosen not in order:
+            return ["max"]
+        return order[order.index(chosen):]
+
+
+    @staticmethod
+    def _clip_to_range(frame: pd.DataFrame, start: date | None, end: date | None) -> pd.DataFrame:
+        """Clip a timestamp-indexed frame to the inclusive ``[start, end]`` window."""
+        if frame.empty or not start or not end:
+            return frame
+        lo = pd.Timestamp(datetime.combine(start, datetime.min.time()), tz="UTC")
+        hi = pd.Timestamp(datetime.combine(end, datetime.max.time()), tz="UTC")
+        return frame.loc[(frame.index >= lo) & (frame.index <= hi)]
+
     # ═══════════════════════════════════════════════════════════════════════
     #  EQUITY FUNDAMENTALS
     # ═══════════════════════════════════════════════════════════════════════
