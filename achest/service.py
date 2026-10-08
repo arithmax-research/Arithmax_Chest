@@ -538,6 +538,26 @@ def to_lean_zip(frame: pd.DataFrame, resolution: str) -> dict[str, bytes]:
     return result
 
 
+def _is_valid_q_symbol(s: str) -> bool:
+    """Return True if *s* is a valid q symbol literal (letters, digits, ., _ only).
+
+    In kdb+/q, symbol names may contain:
+      - a-z, A-Z
+      - 0-9
+      - .  (namespace separator)
+      - _  (underscore)
+
+    The ``^`` (ascending-sort / fill operator), ``-``, and most other special
+    characters are **reserved operators** and cannot appear inside a symbol
+    literal.  When a ticker contains such characters (e.g. ``^VIX``, ``BTC-USD``,
+    ``ES.FUT`` — the dot is actually valid in q symbols) we fall back to a
+    string literal so the output can be parsed by ``value`` in the q client.
+    """
+    if not s:
+        return False
+    return all(c.isalnum() or c in (".", "_") for c in s)
+
+
 def _q_literal(value, column: str = ""):
     if pd.isna(value):
         return "0n" if column != "symbol" else "`"
@@ -549,7 +569,10 @@ def _q_literal(value, column: str = ""):
         return str(value)
     if isinstance(value, str):
         if column == "symbol":
-            return f"`{value}"
+            # Use a string literal when the ticker contains characters
+            # that are not valid inside a q symbol (e.g. ^VIX, BTC-USD).
+            # This keeps the q-table literal parseable by `value`.
+            return f"`{value}" if _is_valid_q_symbol(value) else f'"{value}"'
         return f'"{value}"'
     return str(value)
 
