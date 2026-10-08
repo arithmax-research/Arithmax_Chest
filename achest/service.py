@@ -72,6 +72,10 @@ class UnsupportedRequest(ValueError):
 
 def classify_symbol(symbol: str) -> str:
     clean = symbol.upper().strip()
+    # Commodities first: many roots (NG, ZC, ZW, ...) collide with futures roots
+    # and bare metals pairs (XAUUSD) would otherwise fall through to equity.
+    if _commodity_symbol(clean):
+        return "commodity"
     if _forex_pair(clean):
         return "forex"
     if clean.endswith(("USDT", "USDC", "-USD")):
@@ -85,6 +89,97 @@ def classify_symbol(symbol: str) -> str:
     if clean.isalpha() and len(clean) <= 5:
         return "equity"
     return "equity"
+
+
+# Commodity symbols accepted by Eulerpool's /commodity endpoints (from
+# /commodity/list), plus common Yahoo-style futures and metal-pair aliases.
+_COMMODITY_SYMBOLS = {
+    # energy
+    "CL1", "CL", "BZ", "BRENT", "NG", "RB", "HO", "COAL", "EU_GAS", "UK_GAS",
+    "ETHANOL", "NAPHTHA", "PROPANE", "URANIUM", "METHANOL", "COKING_COAL",
+    "LNG_JKM", "DE_GAS", "URALS", "WTI", "WTI_CRUDE",
+    # metals
+    "XAU", "XAG", "HG", "STEEL", "LITHIUM", "IRON_CNY", "PL", "SCRAP_ALU",
+    "IRON", "SILICON", "SCRAP_STEEL", "TITANIUM", "HRC_STEEL", "ALU_ALLOY",
+    "COBALT_OH", "PA", "ALI", "ALUMINUM",
+    # agriculture
+    "ZS", "ZW", "LUMBER", "PALM_OIL", "CHEESE", "MILK", "RUBBER", "OJ", "KC",
+    "CT", "RICE", "CANOLA", "OAT", "WOOL", "SB", "CC", "TEA", "SUNFLOWER",
+    "RAPESEED", "BARLEY", "BUTTER", "ZC", "ZL", "ZM", "SOYBEAN",
+    # industrial
+    "BITUMEN", "COBALT", "LEAD", "TIN", "ZINC", "NICKEL", "MOLYBDENUM",
+    "RHODIUM", "PHOSPHORUS", "POLYETHYLENE", "POLYVINYL", "POLYPROPYLENE",
+    "SYN_RUBBER", "SODA_ASH", "NEODYMIUM", "STYRENE", "SULFUR", "TELLURIUM",
+    "UREA", "DAP", "MAGNESIUM", "GALLIUM", "GERMANIUM", "MANGANESE", "INDIUM",
+    "KRAFT_PULP", "COPPER",
+    # livestock
+    "FEEDER", "LE", "HE", "BEEF", "POULTRY", "EGGS_US", "EGGS_CH", "SALMON",
+    # commodity indexes / electricity
+    "CRB", "SSE_COMM", "GSCI", "CF_INDEX", "TE_CRACK", "TE_GRAINS", "TE_METALS",
+    "TE_SOFT", "CARBON", "WIND", "NUCLEAR", "SOLAR", "ELEC_UK", "ELEC_DE",
+    "ELEC_FR", "ELEC_IT", "ELEC_ES",
+}
+
+# Precious/industrial metal codes that are quoted against a fiat currency
+# (e.g. XAUUSD) — these are commodities, not FX pairs.
+_METAL_CODES = {"XAU", "XAG", "XPT", "XPD", "HG"}
+
+# Yahoo-style futures roots (and short aliases) mapped to Eulerpool commodity
+# tickers, so ``GC=F`` / ``CL=F`` / ``SI=F`` resolve to a servable symbol.
+_COMMODITY_ALIASES = {
+    "GC": "XAU", "SI": "XAG", "PL": "PL", "PA": "PA", "HG": "HG",
+    "CL": "CL1", "BZ": "BZ", "NG": "NG", "RB": "RB", "HO": "HO",
+    "ZC": "ZC", "ZW": "ZW", "ZS": "ZS", "ZL": "ZL", "ZM": "ZM",
+    "KC": "KC", "CC": "CC", "SB": "SB", "CT": "CT", "OJ": "OJ",
+    "LE": "LE", "HE": "HE", "GF": "FEEDER",
+}
+
+
+def _commodity_symbol(symbol: str) -> str | None:
+    """Return the Eulerpool commodity ticker if *symbol* names a commodity.
+
+    Accepts bare commodity codes (``XAU``, ``NG``, ``CL1``), Yahoo-style
+    futures (``GC=F``, ``CL=F``), and metal pairs quoted in a fiat currency
+    (``XAUUSD`` → ``XAU``, ``XAU/USD`` → ``XAU``).
+    """
+    clean = symbol.upper().strip()
+
+    # Yahoo futures suffix: GC=F, CL=F, SI=F ...
+    if clean.endswith("=F"):
+        base = clean[:-2]
+        if base in _COMMODITY_ALIASES:
+            return _COMMODITY_ALIASES[base]
+        if base in _COMMODITY_SYMBOLS:
+            return base
+
+    # Metal pairs like XAUUSD / XAU-USD / XAU/USD -> XAU
+    if clean[:3] in _METAL_CODES:
+        rest = clean[3:]
+        if not rest:
+            return clean
+        if rest[:1] in ("/", "-", "_", ":"):
+            return clean[:3]
+        if len(rest) == 3 and rest.isalpha():
+            return clean[:3]
+
+    if clean in _COMMODITY_ALIASES:
+        return _COMMODITY_ALIASES[clean]
+    if clean in _COMMODITY_SYMBOLS:
+        return clean
+    return None
+
+
+def _crypto_base(symbol: str) -> str:
+    """Strip a quote-currency suffix from a crypto pair (``BTCUSDT`` → ``BTC``).
+
+    Eulerpool's crypto endpoints key on the bare base symbol, so pairs must be
+    reduced before the request is made.
+    """
+    clean = symbol.upper().strip()
+    for suffix in ("USDT", "USDC", "-USD", "USD"):
+        if clean.endswith(suffix) and len(clean) > len(suffix):
+            return clean[: -len(suffix)]
+    return clean
 
 
 # Common fiat/currency codes used to recognise a bare ``EURUSD``-style pair.
@@ -443,9 +538,12 @@ def _eulerpool(symbol: str, request: DataRequest) -> pd.DataFrame:
     ep = EulerpoolProvider()
     asset = classify_symbol(symbol)
     if asset == "crypto":
-        return ep.crypto_quotes(symbol, request.start, request.end)
+        # Eulerpool uses bare base symbols (BTC, ETH), not pairs (BTCUSDT).
+        return ep.crypto_quotes(_crypto_base(symbol), request.start, request.end)
     if asset == "commodity":
-        return ep.commodity_quotes(symbol, request.start, request.end)
+        # Normalize aliases/pairs (XAUUSD -> XAU, GC=F -> XAU, CL=F -> CL1).
+        ticker = _commodity_symbol(symbol) or symbol
+        return ep.commodity_quotes(ticker, request.start, request.end)
     if asset == "forex":
         pair = _forex_pair(symbol)
         if pair:
