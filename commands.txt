@@ -1,1 +1,0 @@
-q ~/.kx/dashboards/dash.q -p 6003 -u 1
