@@ -367,6 +367,37 @@ def eulerpool_options_greeks(identifier: str):
 def eulerpool_iv_surface(identifier: str):
     """Implied volatility surface."""
     return _json_response(_get_eulerpool().iv_surface(identifier))
+@app.get("/v1/eulerpool/options/iv-surface-q/{identifier}", dependencies=[Depends(require_client_token)])
+def eulerpool_iv_surface_q(identifier: str):
+    """Implied volatility surface as a q-parseable flat table (strike, dte, iv)."""
+    import pandas as pd
+    raw = _get_eulerpool().iv_surface(identifier)
+    ticker = raw.get("ticker", identifier)
+    spot = raw.get("spot", 0.0)
+    expirations: list[str] = raw.get("expirations", [])
+    strikes: list[float] = raw.get("strikes", [])
+    surface: list[list[float | None]] = raw.get("surface", [])
+    from datetime import date as dt_date
+    today = dt_date.today()
+    rows = []
+    for ei, exp_str in enumerate(expirations):
+        try:
+            exp_date = dt_date.fromisoformat(exp_str)
+            dte = (exp_date - today).days
+        except ValueError:
+            dte = 0
+        for si, iv in enumerate(surface[ei] if ei < len(surface) else []):
+            if iv is not None:
+                rows.append({"strike": strikes[si], "dte": dte, "iv": iv})
+    if not rows:
+        return Response("([])", media_type="text/plain")
+    df = pd.DataFrame(rows)
+    # Build q-table literal: ([] strike:(...); dte:(...); iv:(...))
+    strike_lit = "; ".join(str(v) for v in df["strike"].tolist())
+    dte_lit = "; ".join(str(int(v)) for v in df["dte"].tolist())
+    iv_lit = "; ".join(str(v) for v in df["iv"].tolist())
+    q_text = f"([] strike:({strike_lit}); dte:({dte_lit}); iv:({iv_lit}))"
+    return Response(q_text, media_type="text/plain")
 
 @app.get("/v1/eulerpool/options/unusual-activity", dependencies=[Depends(require_client_token)])
 def eulerpool_unusual_options(min_volume: int = Query(default=1000), limit: int = Query(default=50)):
