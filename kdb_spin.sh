@@ -24,7 +24,7 @@ PROJECT_DIR=$(pwd)
 cd /Users/misango/.kx/dashboards/
 
 # Launch dashboards
-q dash.q -p 10001 -u 1
+q dash.q -p 10001 -u 1 2>/dev/null
 
 # 3. Clean up the background process when you exit the script
 echo "Dashboard closed. Stopping background data node (PID: $Q_DATA_PID)..."
