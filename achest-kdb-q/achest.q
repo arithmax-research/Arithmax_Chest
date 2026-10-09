@@ -1,26 +1,3 @@
-/ achest.q — native kdb+/q client for the Arithmax Chest API
-/ ───────────────────────────────────────────────────────────────────
-/ Usage:
-/   \l achest.q
-/   .achest.fetch[`BTCUSDT; 2026.09.01; 2026.09.23; `minute]
-/   .achest.fetch[`BTCUSDT; 2026.09.01; 2026.09.23; `minute; (`provider`token)!(`massive;`abc123)]
-/   .achest.providers[]              / list providers
-/   .achest.route[`AAPL;`daily;`auto] / route symbol
-/   achestFetch[`BTCUSDT; 2026.09.01; 2026.09.23; `minute]  / root alias
-/
-/ ── Transport backends ─────────────────────────────────────────
-/   .achest.setBackend[`curl]     — HTTPS via Caddy (works anywhere)
-/   .achest.setBackend[`http]     — HTTP direct to FastAPI (no TLS, needs port 8001 open)
-/   .achest.setBackend[`daemon]   — persistent keepalive via achest_daemon.py (fastest)
-/
-/   .achest.setBackend[`http]     / switch after loading
-/
-/ ── Fastest setup (recommended) ──
-/   1. Ensure port 8001 is open on the server
-/   2. In a terminal: python3 achest-kdb-q/achest_daemon.py &
-/   3. In q: .achest.setBackend[`daemon]
-/   4. Fetch normally
-
 / Check curl is available
 if[0N~@[system;"which curl 2>/dev/null";0N];
   -2 "ERROR: achest.q requires curl on PATH";
