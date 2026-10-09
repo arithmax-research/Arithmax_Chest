@@ -1,5 +1,5 @@
 / achest.q — native kdb+/q client for the Arithmax Chest API
-/ ───────────────────────────────────────────────────────
+/ ───────────────────────────────────────────────────────────────────
 / Usage:
 /   \l achest.q
 /   .achest.fetch[`BTCUSDT; 2026.09.01; 2026.09.23; `minute]
@@ -7,6 +7,19 @@
 /   .achest.providers[]              / list providers
 /   .achest.route[`AAPL;`daily;`auto] / route symbol
 /   achestFetch[`BTCUSDT; 2026.09.01; 2026.09.23; `minute]  / root alias
+/
+/ ── Transport backends ─────────────────────────────────────────
+/   .achest.setBackend[`curl]     — HTTPS via Caddy (works anywhere)
+/   .achest.setBackend[`http]     — HTTP direct to FastAPI (no TLS, needs port 8001 open)
+/   .achest.setBackend[`daemon]   — persistent keepalive via achest_daemon.py (fastest)
+/
+/   .achest.setBackend[`http]     / switch after loading
+/
+/ ── Fastest setup (recommended) ──
+/   1. Ensure port 8001 is open on the server
+/   2. In a terminal: python3 achest-kdb-q/achest_daemon.py &
+/   3. In q: .achest.setBackend[`daemon]
+/   4. Fetch normally
 
 / Check curl is available
 if[0N~@[system;"which curl 2>/dev/null";0N];
@@ -15,8 +28,25 @@ if[0N~@[system;"which curl 2>/dev/null";0N];
 
 \d .achest
 
-BASE_URL:"https://achestv2.misango.me"
-TOKEN:getenv`DATA_API_TOKEN       / defaults to "" if env var not set
+/ ── Configuration ──────────────────────────────────────────────────
+HTTPS_URL:"https://achestv2.misango.me"      / Caddy (TLS, works anywhere)
+HTTP_URL:"http://46.225.46.174:8001"          / FastAPI direct (no TLS, fast)
+TOKEN:getenv`DATA_API_TOKEN                   / defaults to ""
+BACKEND:`curl                                 / current transport
+DAEMON_HOST:`localhost
+DAEMON_PORT:9999
+
+/ Switch transport backend at runtime.
+setBackend:{[b]
+  if[not b in `curl`http`daemon; '"achest: unknown backend: ",string b];
+  BACKEND::b;
+  b }
+
+/ Resolve active base URL for the current backend.
+baseUrl:{[]
+  $[BACKEND~`http;  HTTP_URL;
+    BACKEND~`daemon; "http://",string[DAEMON_HOST],":",string DAEMON_PORT;
+    HTTPS_URL] }
 
 / ── Build JSON payload via .j.j ──────────────────────
 mkpayload:{[syms;st;en;res;prov]
@@ -34,30 +64,31 @@ mkpayload:{[syms;st;en;res;prov]
   .j.j `symbols`start`end`resolution`provider`format!
         (syms;fmt st;fmt en;string[res];string[prov];`q)
  }
-/ ── curl POST (payload via temp file — avoids shell quoting issues) ──
-curlpost:{[payload;token]
+/ ── curl POST (temp file payload, socket output — fast I/O) ──
+curlpost:{[payload;token;url]
   auth:$[""~token; ""; " -H 'Authorization: Bearer ",token,"'"];
-  fn:"/tmp/_qpayload_",string .z.i;              / unique temp file per PID
-  (`$":",fn) 0: enlist payload;                    / write JSON payload to file
-  rfn:"/tmp/_qresp_",string .z.i;                     / response temp file
+  fn:"/tmp/_qp_",string .z.i;
+  (`$":",fn) 0: enlist payload;
+  rfn:"/tmp/_qr_",string .z.i;
   cmd:"curl -s --max-time 600 --compressed --keepalive-time 60",
       auth,
       " -H 'Content-Type: application/json'",
-      " -X POST -d @",fn," '",BASE_URL,"/v1/data' > ",rfn," 2>&1 || true";
-  @[system;cmd;0N];                                   / run curl, output goes to rfn
-  @[system;"rm -f ",fn;0N];                           / clean up payload file
-  r:@[read0; `$":",rfn; {""}];                        / read response from file
-  @[system;"rm -f ",rfn;0N];                          / clean up response file
-  if[0h=type r; r:raze r];                            / join multi-line response
-  if[not 10h=type r; r:""];                           / safety: coerce to empty string
-  if["curl: ("~9#r; '"curl: ",r];                     / detect curl errors (timeout, DNS, etc.)
-  :r }                                / return raw response
+      " -X POST -d @",fn," '",url,"' > ",rfn," 2>&1 || true";
+  @[system;cmd;0N];
+  @[system;"rm -f ",fn;0N];
+  r:@[read0; `$":",rfn; {""}];
+  @[system;"rm -f ",rfn;0N];
+  if[0h=type r; r:raze r];
+  if[not 10h=type r; r:""];
+  if["curl: ("~9#r; '"curl: ",r];
+  :r }
 
 / ── Core single-request fetch (no parallelism) ──────────
 fetchSingle:{[syms;st;en;res;opts]
   prov:$[`provider in key opts; opts`provider; `auto];
   token:$[`token in key opts; opts`token; TOKEN];
-  raw:curlpost[mkpayload[syms;st;en;res;prov];token];
+  url:baseUrl[],"/v1/data";
+  raw:curlpost[mkpayload[syms;st;en;res;prov];token;url];
   @[value;raw;{'"achest: parse failed: ",x,"\nraw:\n",y}[;raw]]
  }
 
@@ -89,15 +120,11 @@ fetch:{[syms;st;en;res;opts]
 / ── 4-arg shorthand ─────────────────────────────────
 fetch4:{[syms;st;en;res] .achest.fetch[syms;st;en;res;()!()] }
 
-/ ── Direct q IPC fetch (bypasses HTTP/curl) ──────────────
-/   Connect to a q proxy on the server and fetch via native q IPC.
-/   Usage:
-/     h:.achest.ipcConnect[`aws-host;5001]
-/     tbl:.achest.ipcFetch[h;`BTCUSDT;2026.09.01;2026.10.06;`second]
-/     .achest.ipcClose[h]
-/   Or with a helper:
-/     tbl:.achest.ipc[`aws-host;5001;`BTCUSDT;2026.09.01;2026.10.06;`second]
-/ ─────────────────────────────────────────────────────────
+/ ── Direct q IPC fetch (not available — blocked by KX license) ──
+/   q's `hopen` to remote hosts is blocked by the KX license daemon
+/   (`'license error: daemon returned error 'blocked`). IPC cannot
+/   be used. Use `.achest.setBackend[`http]` or `daemon` instead.
+/ ─────────────────────────────────────────────────────────────────
 ipcConnect:{[host;port]
   h:hopen `$ (":" , (string host) , ":" , (string port));
   if[h<=0; '"ipc: cannot connect to ",host,":",string port];
@@ -126,7 +153,7 @@ ipc:{[host;port;syms;st;en;res;prov]
 providers:{[]
   auth:$[""~TOKEN; ""; " -H 'Authorization: Bearer ",TOKEN,"'"];
   raw:@[system;
-    "curl -s",auth," '",BASE_URL,"/v1/providers'";
+    "curl -s",auth," '",baseUrl[],"/v1/providers'";
     {'"achest: curl failed: ",x}];
   @[value;raw;{'"achest: parse failed: ",x}] }
 
@@ -134,7 +161,7 @@ providers:{[]
 route:{[sym;res;prov]
   auth:$[""~TOKEN; ""; " -H 'Authorization: Bearer ",TOKEN,"'"];
   raw:@[system;
-    "curl -s",auth," '",BASE_URL,"/v1/route?symbol=",string[sym],"&resolution=",string[res],"&provider=",string[prov],"'";
+    "curl -s",auth," '",baseUrl[],"/v1/route?symbol=",string[sym],"&resolution=",string[res],"&provider=",string[prov],"'";
     {'"achest: curl failed: ",x}];
   @[value;raw;{'"achest: parse failed: ",x}] }
 
