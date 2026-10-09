@@ -147,3 +147,39 @@ route:{[sym;res;prov]
 / ── Root-level alias for easier VS Code use ──────────
 if[not `achestFetch in key `;
   achestFetch:{[s;st;en;res] .achest.fetch4[s;st;en;res]}]
+
+/ ── Eulerpool IV Surface for 3D plotting ─────────────
+/   Returns a dictionary with keys:
+/     ticker       – symbol string
+/     spot         – underlying price
+/     strikes      – float list        (x-axis, only those with any IV data)
+/     daysToExpiry – int list          (y-axis, only expiries with any IV data)
+/     surface      – float matrix      (z-axis: rows=daysToExpiry, cols=strikes)
+/     table        – (strike;dte;iv)   flat table of non-null triples for scatter
+/     expirations  – date string list  (original, for reference)
+eulerIVSurface:{[ticker]
+  auth:$[""~.achest.TOKEN; ""; " -H 'Authorization: Bearer ",.achest.TOKEN,"'"];
+  / New endpoint returns q-parseable flat table: ([] strike:(...); dte:(...); iv:(...))
+  url:.achest.baseUrl[],"/v1/eulerpool/options/iv-surface-q/",ticker;
+  rfn:"/tmp/_qr_",string .z.i;
+  cmd:"curl -s --max-time 30",auth," '",url,"' > ",rfn," 2>&1 || true";
+  @[system;cmd;0N];
+  r:@[read0; `$":",rfn; {"curl: error"}];
+  @[system;"rm -f ",rfn;0N];
+  if[0h=type r; r:raze r];
+  if[not 10h=type r; :'`euler_surface_failed];
+  qtable:@[value; r; {'"eulerIVSurface parse failed: ",x}];
+  if[not 98h=type qtable; :'`euler_surface_not_table];
+  / Build return dict from the flat table
+  strikesUse:exec distinct strike from qtable;
+  dteUse:exec distinct dte from qtable;
+  / Build surface matrix: rows=dteUse, cols=strikesUse
+  surfClean:{[dteVal] {[stkVal;tbl] first 0^exec iv from tbl where strike=stkVal,dte=dteVal}[;qtable] each strikesUse} each dteUse;
+  / Return
+  `ticker`spot`strikes`daysToExpiry`surface`table!
+    (ticker; 0n; strikesUse; dteUse; surfClean; qtable)
+ }
+
+/ Alias at root level for convenience
+if[not `ivSurface in key `;
+  ivSurface:.achest.eulerIVSurface]
